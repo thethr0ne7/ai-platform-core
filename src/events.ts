@@ -14,7 +14,10 @@ export type PlatformEventType =
   | "memory.write.completed"
   | "memory.write.rejected"
   | "memory.version.created"
-  | "evidence.attached";
+  | "evidence.attached"
+  | "retrieval.search.requested"
+  | "retrieval.search.completed"
+  | "retrieval.search.rejected";
 
 export type EventDispatchMode = "best-effort" | "strict";
 
