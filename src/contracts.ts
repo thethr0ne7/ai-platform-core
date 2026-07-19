@@ -1,3 +1,5 @@
+import type { ProviderResolver } from "./providers.js";
+
 export type ProductId =
   | "proidu"
   | "grant-ai"
@@ -44,6 +46,7 @@ export interface ExecutionContext {
   product: ProductDefinition;
   action: string;
   startedAt: number;
+  providers: ProviderResolver;
 }
 
 export interface PlatformSuccess<TData = unknown> {
