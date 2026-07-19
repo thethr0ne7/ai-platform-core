@@ -8,6 +8,7 @@ import type {
   PlatformResult,
   ProductId
 } from "./contracts.js";
+import { emptyEventBus, type EventBus, type PlatformEventType } from "./events.js";
 import type { ProviderResolver } from "./providers.js";
 import { getProduct } from "./registry.js";
 
@@ -34,15 +35,30 @@ function failure(input: {
 
 export async function orchestrate<TPayload, TData = unknown>(
   request: PlatformRequest<TPayload>,
-  providers: ProviderResolver = emptyProviderResolver
+  providers: ProviderResolver = emptyProviderResolver,
+  events: EventBus = emptyEventBus
 ): Promise<PlatformResult<TData>> {
   const startedAt = Date.now();
   const requestId = request.requestId?.trim() || randomUUID();
   const traceId = randomUUID();
-  const product = getProduct(request.productId);
 
+  const emit = async (type: PlatformEventType, payload: unknown, productId?: ProductId): Promise<void> => {
+    await events.publish({
+      type,
+      requestId,
+      traceId,
+      ...(productId ? { productId } : {}),
+      action: request.action,
+      payload
+    });
+  };
+
+  await emit("request.received", {});
+  await emit("request.validated", {});
+
+  const product = getProduct(request.productId);
   if (!product) {
-    return failure({
+    const result = failure({
       code: "UNKNOWN_PRODUCT",
       message: `Unknown product: ${request.productId}`,
       requestId,
@@ -51,10 +67,14 @@ export async function orchestrate<TPayload, TData = unknown>(
       productId: request.productId,
       action: request.action
     });
+    await emit("action.failed", result.error, request.productId);
+    return result;
   }
 
+  await emit("product.resolved", { status: product.status }, product.id);
+
   if (product.status !== "active") {
-    return failure({
+    const result = failure({
       code: "PRODUCT_NOT_ACTIVE",
       message: `Product is not active: ${product.id}`,
       requestId,
@@ -63,11 +83,13 @@ export async function orchestrate<TPayload, TData = unknown>(
       productId: product.id,
       action: request.action
     });
+    await emit("action.failed", result.error, product.id);
+    return result;
   }
 
   const handler = getAction(request.action);
   if (!handler) {
-    return failure({
+    const result = failure({
       code: "UNKNOWN_ACTION",
       message: `Unknown action: ${request.action}`,
       requestId,
@@ -76,14 +98,19 @@ export async function orchestrate<TPayload, TData = unknown>(
       productId: product.id,
       action: request.action
     });
+    await emit("action.failed", result.error, product.id);
+    return result;
   }
+
+  await emit("action.resolved", { requiredCapabilities: handler.requiredCapabilities }, product.id);
 
   const denied = handler.requiredCapabilities.filter(
     (capability) => !product.capabilities.includes(capability)
   );
+  await emit("capability.checked", { allowed: denied.length === 0, denied }, product.id);
 
   if (denied.length > 0) {
-    return failure({
+    const result = failure({
       code: "CAPABILITY_DENIED",
       message: `Missing capabilities: ${denied.join(", ")}`,
       requestId,
@@ -92,7 +119,11 @@ export async function orchestrate<TPayload, TData = unknown>(
       productId: product.id,
       action: request.action
     });
+    await emit("action.failed", result.error, product.id);
+    return result;
   }
+
+  await emit("action.started", {}, product.id);
 
   try {
     const data = (await handler.execute(request.payload, {
@@ -104,7 +135,7 @@ export async function orchestrate<TPayload, TData = unknown>(
       providers
     })) as TData;
 
-    return {
+    const result: PlatformResult<TData> = {
       ok: true,
       requestId,
       traceId,
@@ -114,8 +145,10 @@ export async function orchestrate<TPayload, TData = unknown>(
       capabilitiesUsed: handler.requiredCapabilities,
       data
     };
+    await emit("action.completed", { durationMs: result.durationMs }, product.id);
+    return result;
   } catch (error) {
-    return failure({
+    const result = failure({
       code: "HANDLER_FAILED",
       message: error instanceof Error ? error.message : "Action handler failed",
       requestId,
@@ -124,5 +157,7 @@ export async function orchestrate<TPayload, TData = unknown>(
       productId: product.id,
       action: request.action
     });
+    await emit("action.failed", result.error, product.id);
+    return result;
   }
 }
