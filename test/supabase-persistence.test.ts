@@ -20,7 +20,7 @@ interface FakeState {
 }
 
 function jsonResponse(value: unknown, status = 200): Response {
-  return new Response(value === undefined ? "" : JSON.stringify(value), {
+  return new Response(value === undefined ? null : JSON.stringify(value), {
     status,
     headers: { "content-type": "application/json" }
   });
