@@ -12,6 +12,7 @@
     "test": "tsx --test test/*.test.ts",
     "verify": "npm run check && npm test",
     "start": "node --enable-source-maps dist/server.js",
+    "worker:proidu-mai": "node --enable-source-maps dist/proidu-mai-worker.js",
     "build": "tsc"
   },
   "devDependencies": {
