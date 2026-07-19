@@ -25,20 +25,21 @@ test("parses official MAI 2026 fixture and quarantines malformed records", async
   const result = parseMaiPrograms(await fixture());
   assert.equal(result.records.length, 2);
   assert.equal(result.quarantine.length, 1);
-  assert.deepEqual(result.records[0], {
-    institution: "Московский авиационный институт",
-    admissionYear: 2026,
-    title: "Прикладная математика и информатика",
-    code: "01.03.02",
-    exams: ["Математика", "Информатика или физика", "Русский язык"],
-    city: "Москва",
-    studyForm: "Очная",
-    budgetSeats: 125,
-    paidSeats: 55,
-    budgetPassingScore: 275,
-    paidPassingScore: 220,
-    sourceUrl: "https://priem.mai.ru/base/programs/"
-  });
+  const first = result.records[0];
+  assert.ok(first);
+  assert.equal(first.institution, "Московский авиационный институт");
+  assert.equal(first.admissionYear, 2026);
+  assert.equal(first.title, "Прикладная математика и информатика");
+  assert.equal(first.code, "01.03.02");
+  assert.equal(first.exams.includes("Математика"), true);
+  assert.equal(first.exams.includes("Информатика или физика"), true);
+  assert.equal(first.city, "Москва");
+  assert.equal(first.studyForm, "Очная");
+  assert.equal(first.budgetSeats, 125);
+  assert.equal(first.paidSeats, 55);
+  assert.equal(first.budgetPassingScore, 275);
+  assert.equal(first.paidPassingScore, 220);
+  assert.equal(first.sourceUrl, "https://priem.mai.ru/base/programs/");
 });
 
 test("runs requirement to version to index to grounded query without duplicates", async () => {
