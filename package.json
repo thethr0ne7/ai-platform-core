@@ -1,6 +1,6 @@
 {
   "name": "@thr0ne7/ai-platform-core",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -9,6 +9,8 @@
   "scripts": {
     "dev": "tsx src/server.ts",
     "check": "tsc --noEmit",
+    "test": "tsx --test test/*.test.ts",
+    "verify": "npm run check && npm test",
     "start": "node --enable-source-maps dist/server.js",
     "build": "tsc"
   },

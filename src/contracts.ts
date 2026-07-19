@@ -24,17 +24,57 @@ export interface ProductDefinition {
 }
 
 export interface PlatformRequest<TPayload = unknown> {
-  requestId: string;
+  requestId?: string;
   productId: ProductId;
   action: string;
   payload: TPayload;
 }
 
-export interface PlatformResult<TData = unknown> {
+export type PlatformErrorCode =
+  | "INVALID_REQUEST"
+  | "UNKNOWN_PRODUCT"
+  | "PRODUCT_NOT_ACTIVE"
+  | "UNKNOWN_ACTION"
+  | "CAPABILITY_DENIED"
+  | "HANDLER_FAILED";
+
+export interface ExecutionContext {
   requestId: string;
+  traceId: string;
+  product: ProductDefinition;
+  action: string;
+  startedAt: number;
+}
+
+export interface PlatformSuccess<TData = unknown> {
+  ok: true;
+  requestId: string;
+  traceId: string;
   productId: ProductId;
-  status: "completed" | "rejected";
+  action: string;
+  durationMs: number;
   capabilitiesUsed: CapabilityId[];
-  data?: TData;
-  error?: string;
+  data: TData;
+}
+
+export interface PlatformFailure {
+  ok: false;
+  requestId: string;
+  traceId: string;
+  productId?: ProductId;
+  action?: string;
+  durationMs: number;
+  capabilitiesUsed: CapabilityId[];
+  error: {
+    code: PlatformErrorCode;
+    message: string;
+  };
+}
+
+export type PlatformResult<TData = unknown> = PlatformSuccess<TData> | PlatformFailure;
+
+export interface ActionHandler<TPayload = unknown, TData = unknown> {
+  action: string;
+  requiredCapabilities: CapabilityId[];
+  execute(payload: TPayload, context: ExecutionContext): Promise<TData>;
 }
