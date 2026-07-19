@@ -6,12 +6,12 @@ import {
 } from "./proidu-mai.js";
 import {
   SupabaseIngestionLedger,
-  SupabasePostgrestClient,
   SupabaseSourceCheckpointStore,
   SupabaseVersionStore,
   runPersistentMaiVerticalSlice,
   type PersistentMaiSliceResult
 } from "./supabase-persistence.js";
+import { PlatformSupabasePostgrestClient } from "./platform-supabase-client.js";
 
 export interface ProiduMaiWorkerEnvironment {
   readonly SUPABASE_URL?: string;
@@ -78,7 +78,7 @@ async function executeWithSupabase(
   input: WorkerExecutionInput,
   persistenceFetch: typeof fetch
 ): Promise<PersistentMaiSliceResult> {
-  const client = new SupabasePostgrestClient(
+  const client = new PlatformSupabasePostgrestClient(
     {
       url: input.config.supabaseUrl,
       serviceRoleKey: input.config.serviceRoleKey
