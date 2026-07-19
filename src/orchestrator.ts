@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { getAction } from "./actions.js";
+import { emptyProviderResolver } from "./container.js";
 import type {
   PlatformErrorCode,
   PlatformFailure,
@@ -7,6 +8,7 @@ import type {
   PlatformResult,
   ProductId
 } from "./contracts.js";
+import type { ProviderResolver } from "./providers.js";
 import { getProduct } from "./registry.js";
 
 function failure(input: {
@@ -31,7 +33,8 @@ function failure(input: {
 }
 
 export async function orchestrate<TPayload, TData = unknown>(
-  request: PlatformRequest<TPayload>
+  request: PlatformRequest<TPayload>,
+  providers: ProviderResolver = emptyProviderResolver
 ): Promise<PlatformResult<TData>> {
   const startedAt = Date.now();
   const requestId = request.requestId?.trim() || randomUUID();
@@ -97,7 +100,8 @@ export async function orchestrate<TPayload, TData = unknown>(
       traceId,
       product,
       action: request.action,
-      startedAt
+      startedAt,
+      providers
     })) as TData;
 
     return {
