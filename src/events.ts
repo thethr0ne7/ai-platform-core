@@ -9,7 +9,12 @@ export type PlatformEventType =
   | "capability.checked"
   | "action.started"
   | "action.completed"
-  | "action.failed";
+  | "action.failed"
+  | "memory.write.requested"
+  | "memory.write.completed"
+  | "memory.write.rejected"
+  | "memory.version.created"
+  | "evidence.attached";
 
 export type EventDispatchMode = "best-effort" | "strict";
 
