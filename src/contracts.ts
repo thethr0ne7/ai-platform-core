@@ -1,12 +1,6 @@
 import type { ProviderResolver } from "./providers.js";
 
-export type ProductId =
-  | "proidu"
-  | "grant-ai"
-  | "agro-ai"
-  | "tourism-ai"
-  | "education-ai"
-  | "government-intelligence";
+export type ProductId = string;
 
 export type CapabilityId =
   | "orchestration"
@@ -18,10 +12,12 @@ export type CapabilityId =
   | "billing"
   | "ui-system";
 
+export type ProductStatus = "active" | "planned" | "parked";
+
 export interface ProductDefinition {
   id: ProductId;
   name: string;
-  status: "active" | "planned" | "parked";
+  status: ProductStatus;
   capabilities: CapabilityId[];
 }
 
