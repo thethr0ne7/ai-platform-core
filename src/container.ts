@@ -73,11 +73,24 @@ export class DependencyContainer implements ProviderResolver {
   }
 }
 
-export const emptyProviderResolver: ProviderResolver = Object.freeze({
-  has: () => false,
-  optional: () => undefined,
-  resolve: (kind: ProviderKind): never => {
+class EmptyProviderResolver implements ProviderResolver {
+  has<TKind extends ProviderKind>(_kind: TKind): boolean {
+    return false;
+  }
+
+  optional<TKind extends ProviderKind>(_kind: TKind): ProviderMap[TKind] | undefined {
+    return undefined;
+  }
+
+  resolve<TKind extends ProviderKind>(kind: TKind): ProviderMap[TKind] {
     throw new ProviderNotFoundError(kind);
-  },
-  list: () => []
-});
+  }
+
+  list(): ReadonlyArray<ProviderIdentity> {
+    return [];
+  }
+}
+
+export const emptyProviderResolver: ProviderResolver = Object.freeze(
+  new EmptyProviderResolver()
+);
