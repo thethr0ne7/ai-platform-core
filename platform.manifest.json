@@ -1,0 +1,27 @@
+{
+  "platform": "AI Platform Core",
+  "version": "0.1.0",
+  "architecture": {
+    "layers": [
+      "product",
+      "capability",
+      "orchestration",
+      "data",
+      "platform"
+    ],
+    "verticalSlice": "product request -> registry -> capability resolution -> orchestrator -> result"
+  },
+  "qualityGates": [
+    "strict-types",
+    "product-isolation",
+    "capability-registration",
+    "health-check",
+    "no-secrets-in-repository"
+  ],
+  "deployment": {
+    "source": "GitHub",
+    "frontend": "Vercel",
+    "data": "Supabase",
+    "surfaces": ["web", "telegram-mini-app"]
+  }
+}
