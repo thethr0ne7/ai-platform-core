@@ -166,7 +166,13 @@ export class InMemoryEvidenceProvider implements MemoryProvider {
     const namespace = key.slice(0, separator);
     const id = key.slice(separator + 1);
     const record = await this.read<TValue>(namespace, id);
-    return record ? { key, value: record.content, updatedAt: record.updatedAt, metadata: record.metadata } : undefined;
+    if (!record) return undefined;
+    return {
+      key,
+      value: record.content,
+      updatedAt: record.updatedAt,
+      ...(record.metadata ? { metadata: record.metadata } : {})
+    };
   }
 
   async set<TValue = unknown>(record: LegacyMemoryRecord<TValue>): Promise<void> {
@@ -177,7 +183,7 @@ export class InMemoryEvidenceProvider implements MemoryProvider {
       id: record.key.slice(separator + 1),
       subject: record.key,
       content: record.value,
-      metadata: record.metadata
+      ...(record.metadata ? { metadata: record.metadata } : {})
     });
   }
 
