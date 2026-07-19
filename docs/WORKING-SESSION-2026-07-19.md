@@ -116,7 +116,18 @@ Added:
 - tests
 - GitHub Actions CI
 
-Current CI state: FAILED. The Foundation gate is not passed and the pull request must not be merged until the failure is diagnosed and repaired.
+Verification result:
+
+- dependency installation: PASS
+- TypeScript check: PASS
+- unit tests: PASS
+- production build: PASS
+- CI run: `29698649679`
+- verified commit: `6441fb1fe1ccb018b54c435c9d3d50cf4073f0db`
+
+The original CI failure was caused by a non-portable recursive shell glob in the test script. It was replaced with a stable test path, and CI was moved to Node.js 24.
+
+Foundation execution and build gates are now green. The PR may proceed to code review, but final merge still requires documentation consistency, reproducible API examples, and confirmation of all declared error paths.
 
 ## 6. Alignment assessment
 
@@ -124,23 +135,28 @@ The repository currently matches the project at different levels:
 
 - Strategic direction: strong
 - Repository separation: strong
-- Foundation architecture: medium-to-strong
+- Foundation architecture: strong
 - AI Factory 2.0 embodiment: weak-to-medium
 - Real shared capabilities: weak
 - Product integrations: not started
-- Production readiness: not ready
+- Production readiness: foundation verified, production hardening not started
 
-Overall state: approximately one third of the intended platform, with the correct direction but only the first execution foundation under construction.
+Overall state: the first executable foundation is verified, while most platform capabilities and Factory 2.0 modules remain future work.
 
 ## 7. Immediate priorities
 
-P0:
+P0 completed:
 
-1. Diagnose and repair the failed CI run.
-2. Make `npm run verify` and `npm run build` pass.
-3. Add a reproducible request example for `POST /v1/execute`.
-4. Confirm stable errors for invalid input, unknown action, inactive product, capability denial, and handler failure.
-5. Merge Foundation v0.2 only after all gates pass.
+1. Diagnosed and repaired the failed CI run.
+2. `npm run verify` passes.
+3. `npm run build` passes.
+
+P0 remaining:
+
+1. Add a reproducible request example for `POST /v1/execute`.
+2. Confirm stable errors for invalid input, unknown action, inactive product, capability denial, and handler failure.
+3. Review the complete PR diff for contract inconsistencies.
+4. Merge Foundation v0.2 only after all gates pass.
 
 P1:
 
