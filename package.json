@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "tsx src/server.ts",
     "check": "tsc --noEmit",
-    "test": "tsx --test test/**/*.test.ts",
+    "test": "tsx --test test/*.test.ts",
     "verify": "npm run check && npm test",
     "start": "node --enable-source-maps dist/server.js",
     "build": "tsc"
