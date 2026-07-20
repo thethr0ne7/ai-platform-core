@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 export type SourceKind = "api" | "rss" | "sitemap" | "html" | "document";
 export type DocumentFormat = "html" | "pdf" | "docx" | "xlsx" | "csv" | "txt" | "image" | "unknown";
 export type ExtractionMethod = "structured" | "html" | "native-document" | "ocr" | "unsupported";
-export type SourceLevel = "federal" | "regional" | "development-institution";
+export type SourceLevel = "federal" | "regional" | "municipal" | "development-institution";
 
 export interface OfficialSourceDefinition {
   id: string;
@@ -112,9 +112,7 @@ export class OfficialSourceRegistry {
 
   register(source: OfficialSourceDefinition): void {
     validateSourceDefinition(source);
-    if (this.sources.has(source.id)) {
-      throw new Error(`Источник с id ${source.id} уже зарегистрирован`);
-    }
+    if (this.sources.has(source.id)) throw new Error(`Источник с id ${source.id} уже зарегистрирован`);
     this.sources.set(source.id, structuredClone(source));
   }
 
@@ -136,9 +134,7 @@ export class OfficialSourceRegistry {
       const normalized = allowedHost.toLowerCase();
       return host === normalized || host.endsWith(`.${normalized}`);
     });
-    if (!allowed || parsed.protocol !== "https:") {
-      throw new Error(`URL не принадлежит разрешённому официальному домену источника ${sourceId}`);
-    }
+    if (!allowed || parsed.protocol !== "https:") throw new Error(`URL не принадлежит разрешённому официальному домену источника ${sourceId}`);
     parsed.hash = "";
     return parsed;
   }
@@ -148,9 +144,7 @@ export class SourceAdapterRegistry {
   private readonly adapters = new Map<string, SourceAdapter>();
 
   register(adapter: SourceAdapter): void {
-    if (this.adapters.has(adapter.sourceId)) {
-      throw new Error(`Адаптер для ${adapter.sourceId} уже зарегистрирован`);
-    }
+    if (this.adapters.has(adapter.sourceId)) throw new Error(`Адаптер для ${adapter.sourceId} уже зарегистрирован`);
     this.adapters.set(adapter.sourceId, adapter);
   }
 
@@ -164,39 +158,26 @@ export class SourceAdapterRegistry {
 export function decideExtraction(input: ExtractionInput): ExtractionDecision {
   const format = detectFormat(input);
   switch (format) {
-    case "html":
-      return { format, method: "html", requiresOcr: false, reason: "HTML разбирается через DOM без OCR" };
+    case "html": return { format, method: "html", requiresOcr: false, reason: "HTML разбирается через DOM без OCR" };
     case "docx":
     case "xlsx":
     case "csv":
-    case "txt":
-      return { format, method: "native-document", requiresOcr: false, reason: "Формат имеет машиночитаемую структуру" };
-    case "image":
-      return { format, method: "ocr", requiresOcr: true, reason: "Изображение не содержит текстового слоя" };
+    case "txt": return { format, method: "native-document", requiresOcr: false, reason: "Формат имеет машиночитаемую структуру" };
+    case "image": return { format, method: "ocr", requiresOcr: true, reason: "Изображение не содержит текстового слоя" };
     case "pdf": {
       const normalized = normalizeText(input.text ?? "");
-      const hasUsefulTextLayer = normalized.length >= 80;
-      return hasUsefulTextLayer
+      return normalized.length >= 80
         ? { format, method: "native-document", requiresOcr: false, reason: "PDF содержит пригодный текстовый слой" }
         : { format, method: "ocr", requiresOcr: true, reason: "В PDF отсутствует пригодный текстовый слой" };
     }
-    default:
-      return { format, method: "unsupported", requiresOcr: false, reason: "Формат пока не поддерживается" };
+    default: return { format, method: "unsupported", requiresOcr: false, reason: "Формат пока не поддерживается" };
   }
 }
 
-export function createEvidenceRecord(args: {
-  source: OfficialSourceDefinition;
-  item: DiscoveredOfficialItem;
-  checkedAt: string;
-  text: string;
-  extractionMethod: ExtractionMethod;
-  citations?: EvidenceCitation[];
-}): EvidenceRecord {
+export function createEvidenceRecord(args: { source: OfficialSourceDefinition; item: DiscoveredOfficialItem; checkedAt: string; text: string; extractionMethod: ExtractionMethod; citations?: EvidenceCitation[]; }): EvidenceRecord {
   const normalizedText = normalizeText(args.text);
   if (!normalizedText) throw new Error("Нельзя создать доказательство без извлечённого текста");
   if (args.item.sourceId !== args.source.id) throw new Error("Документ не соответствует выбранному источнику");
-
   return {
     sourceId: args.source.id,
     canonicalUrl: canonicalizeUrl(args.item.canonicalUrl),
@@ -216,31 +197,18 @@ export function createEvidenceRecord(args: {
 export function compareEvidenceVersions(previousText: string | undefined, currentText: string): VersionComparison {
   const normalizedCurrent = normalizeText(currentText);
   const currentHash = sha256(normalizedCurrent);
-  if (previousText === undefined) {
-    return { changed: true, currentHash, addedLines: splitComparableLines(normalizedCurrent), removedLines: [] };
-  }
-
+  if (previousText === undefined) return { changed: true, currentHash, addedLines: splitComparableLines(normalizedCurrent), removedLines: [] };
   const normalizedPrevious = normalizeText(previousText);
   const previousHash = sha256(normalizedPrevious);
-  if (previousHash === currentHash) {
-    return { changed: false, previousHash, currentHash, addedLines: [], removedLines: [] };
-  }
-
+  if (previousHash === currentHash) return { changed: false, previousHash, currentHash, addedLines: [], removedLines: [] };
   const before = new Set(splitComparableLines(normalizedPrevious));
   const after = new Set(splitComparableLines(normalizedCurrent));
-  return {
-    changed: true,
-    previousHash,
-    currentHash,
-    addedLines: [...after].filter((line) => !before.has(line)),
-    removedLines: [...before].filter((line) => !after.has(line)),
-  };
+  return { changed: true, previousHash, currentHash, addedLines: [...after].filter((line) => !before.has(line)), removedLines: [...before].filter((line) => !after.has(line)) };
 }
 
 export function detectFormat(input: ExtractionInput): DocumentFormat {
   const mime = input.contentType?.split(";")[0]?.trim().toLowerCase();
   if (mime && MIME_FORMATS[mime]) return MIME_FORMATS[mime];
-
   const name = input.fileName ?? safePathName(input.url);
   const extension = name.toLowerCase().split(".").pop();
   if (extension && EXTENSION_FORMATS[extension]) return EXTENSION_FORMATS[extension];
@@ -251,21 +219,14 @@ export function canonicalizeUrl(value: string): string {
   const url = new URL(value);
   url.hash = "";
   for (const key of [...url.searchParams.keys()]) {
-    if (["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "yclid", "gclid"].includes(key)) {
-      url.searchParams.delete(key);
-    }
+    if (["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "yclid", "gclid"].includes(key)) url.searchParams.delete(key);
   }
   url.searchParams.sort();
   return url.toString();
 }
 
 export function normalizeText(value: string): string {
-  return value
-    .replace(/\r\n?/g, "\n")
-    .replace(/[\t\f\v ]+/g, " ")
-    .replace(/ *\n */g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+  return value.replace(/\r\n?/g, "\n").replace(/[\t\f\v ]+/g, " ").replace(/ *\n */g, "\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
 function validateSourceDefinition(source: OfficialSourceDefinition): void {
@@ -276,18 +237,6 @@ function validateSourceDefinition(source: OfficialSourceDefinition): void {
   if (source.allowedHosts.length === 0) throw new Error("Нужно указать разрешённые официальные домены");
 }
 
-function sha256(value: string): string {
-  return createHash("sha256").update(value, "utf8").digest("hex");
-}
-
-function splitComparableLines(value: string): string[] {
-  return value.split("\n").map((line) => line.trim()).filter((line) => line.length > 0);
-}
-
-function safePathName(value: string): string {
-  try {
-    return new URL(value).pathname.split("/").pop() ?? "";
-  } catch {
-    return value;
-  }
-}
+function sha256(value: string): string { return createHash("sha256").update(value, "utf8").digest("hex"); }
+function splitComparableLines(value: string): string[] { return value.split("\n").map((line) => line.trim()).filter((line) => line.length > 0); }
+function safePathName(value: string): string { try { return new URL(value).pathname.split("/").pop() ?? ""; } catch { return value; } }
