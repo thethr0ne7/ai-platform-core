@@ -92,14 +92,23 @@ async function readFunctionError(error: unknown) {
 
 export async function callTelegramApi<T>(action: string, payload: Record<string, unknown> = {}): Promise<T> {
   const initData = getTelegramInitData();
-  if (!initData) {
-    throw new Error("Откройте приложение через Telegram-бота @stateappstartup_bot.");
-  }
+  if (!initData) throw new Error("Откройте приложение через Telegram-бота @stateappstartup_bot.");
 
   const { data, error } = await supabase.functions.invoke(functionName, {
     body: { action, initData, ...payload },
   });
+  if (error) throw new Error(await readFunctionError(error));
+  if (data?.error) throw new Error(String(data.error));
+  return data as T;
+}
 
+export async function callGovernmentOpportunityApi<T>(projectId: string): Promise<T> {
+  const initData = getTelegramInitData();
+  if (!initData) throw new Error("Откройте приложение через Telegram-бота @stateappstartup_bot.");
+
+  const { data, error } = await supabase.functions.invoke("government-opportunity-api", {
+    body: { initData, projectId },
+  });
   if (error) throw new Error(await readFunctionError(error));
   if (data?.error) throw new Error(String(data.error));
   return data as T;
