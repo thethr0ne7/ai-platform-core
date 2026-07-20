@@ -11,7 +11,7 @@ const KBR_REGION = "Кабардино-Балкарская Республика
  * Verified official regional domains used by the KBR data pass.
  * Each adapter remains evidence-first: it only accepts HTTPS URLs from its own allowlist.
  */
-export const KBR_SOURCE_CONFIGS: readonly GenericOfficialSiteConfig[] = [
+export const KBR_SOURCE_CONFIGS: GenericOfficialSiteConfig[] = [
   {
     sourceId: "kbr-economy",
     authority: "Министерство экономического развития Кабардино-Балкарской Республики",
@@ -72,8 +72,12 @@ export const KBR_SOURCE_CONFIGS: readonly GenericOfficialSiteConfig[] = [
       /\.(pdf|docx?|xlsx?|csv|zip)($|\?)/i,
     ],
   },
-] as const;
+];
 
 export function createKbrRegionalAdapters(http?: HttpClient): SourceAdapter[] {
-  return KBR_SOURCE_CONFIGS.map((config) => new GenericOfficialSiteAdapter(config, http));
+  return KBR_SOURCE_CONFIGS.map((config) => (
+    http
+      ? new GenericOfficialSiteAdapter(config, http)
+      : new GenericOfficialSiteAdapter(config)
+  ));
 }
