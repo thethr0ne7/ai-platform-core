@@ -1,1 +1,1 @@
-export { ProjectIntakeWorkspace as IntelligenceWorkspace } from "./project-intake-workspace";
+export { PersistentProjectWorkspace as IntelligenceWorkspace } from "./persistent-project-workspace";
