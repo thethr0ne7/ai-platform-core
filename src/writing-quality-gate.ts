@@ -88,7 +88,8 @@ function addPatternViolations(
     pattern.lastIndex = 0;
     for (const match of text.matchAll(pattern)) {
       const start = match.index ?? 0;
-      const excerpt = match[0];
+      const excerpt = match[0] ?? "";
+      if (!excerpt) continue;
       if (!overlapsProtected(start, start + excerpt.length, ranges)) output.push(create(excerpt));
     }
   }
