@@ -1,1 +1,1 @@
-export { DecisionOsWorkspace as IntelligenceWorkspace } from "./decision-os-workspace";
+export { ProjectIntakeWorkspace as IntelligenceWorkspace } from "./project-intake-workspace";
