@@ -9,6 +9,7 @@ import {
 } from "./source-intelligence.js";
 import { createInitialOfficialSourceRegistry } from "./official-sources.js";
 import { createRealAdapters, type DiscoveryWindow } from "./source-adapters.js";
+import { createKbrRegionalAdapters } from "./kbr-source-adapters.js";
 
 export interface ExtractionGateway {
   extract(item: DiscoveredOfficialItem): Promise<{ text: string; method: ExtractionMethod }>;
@@ -91,7 +92,7 @@ export class SourceIngestionRunner {
 export class BasicExtractionGateway implements ExtractionGateway {
   async extract(item: DiscoveredOfficialItem): Promise<{ text: string; method: ExtractionMethod }> {
     const target = item.attachmentUrls[0] ?? item.canonicalUrl;
-    const response = await fetch(target, { headers: { "user-agent": "StateApp-OfficialSourceBot/0.32" } });
+    const response = await fetch(target, { headers: { "user-agent": "StateApp-OfficialSourceBot/0.34" } });
     if (!response.ok) throw new Error(`Не удалось скачать документ: HTTP ${response.status}`);
     const contentType = response.headers.get("content-type") ?? item.contentType ?? "";
 
@@ -117,7 +118,9 @@ export function createDefaultSourceRunner(
   persistence: SourcePersistence,
   extraction: ExtractionGateway = new BasicExtractionGateway(),
 ): SourceIngestionRunner {
-  return new SourceIngestionRunner(createRealAdapters(), extraction, persistence);
+  const adapters = [...createRealAdapters(), ...createKbrRegionalAdapters()];
+  const unique = new Map(adapters.map((adapter) => [adapter.sourceId, adapter]));
+  return new SourceIngestionRunner([...unique.values()], extraction, persistence);
 }
 
 function sourceRank(source: OfficialSourceDefinition): number {
