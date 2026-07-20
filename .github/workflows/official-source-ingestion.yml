@@ -40,9 +40,6 @@ on:
 permissions:
   contents: read
 
-actions:
-  # No write permissions are granted. The workflow can only read code and call Supabase.
-
 concurrency:
   group: official-source-ingestion-production
   cancel-in-progress: false
