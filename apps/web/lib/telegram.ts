@@ -66,6 +66,30 @@ export function initializeTelegramMiniApp() {
   window.Telegram?.WebApp?.expand();
 }
 
+async function readFunctionError(error: unknown) {
+  const fallback = error instanceof Error
+    ? error.message
+    : "Не удалось обратиться к Telegram API проекта";
+
+  const context = (error as { context?: Response } | null)?.context;
+  if (!context) return fallback;
+
+  try {
+    const body = await context.clone().json() as { error?: unknown; message?: unknown };
+    if (typeof body.error === "string" && body.error.trim()) return body.error;
+    if (typeof body.message === "string" && body.message.trim()) return body.message;
+  } catch {
+    try {
+      const text = await context.clone().text();
+      if (text.trim()) return text;
+    } catch {
+      // Keep the original SDK error.
+    }
+  }
+
+  return fallback;
+}
+
 export async function callTelegramApi<T>(action: string, payload: Record<string, unknown> = {}): Promise<T> {
   const initData = getTelegramInitData();
   if (!initData) {
@@ -76,7 +100,7 @@ export async function callTelegramApi<T>(action: string, payload: Record<string,
     body: { action, initData, ...payload },
   });
 
-  if (error) throw new Error(error.message || "Не удалось обратиться к Telegram API проекта");
+  if (error) throw new Error(await readFunctionError(error));
   if (data?.error) throw new Error(String(data.error));
   return data as T;
 }
