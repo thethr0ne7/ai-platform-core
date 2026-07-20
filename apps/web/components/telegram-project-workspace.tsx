@@ -57,6 +57,9 @@ const categories = [
   "Другое",
 ];
 
+const MAX_FILE_SIZE = 25 * 1024 * 1024;
+const ACCEPTED_EXTENSIONS = ["pdf", "doc", "docx", "xls", "xlsx", "csv", "txt", "jpg", "jpeg", "png", "webp"];
+
 export function TelegramProjectWorkspace() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [identity, setIdentity] = useState<TelegramIdentity | null>(null);
@@ -115,16 +118,39 @@ export function TelegramProjectWorkspace() {
   }
 
   function addFiles(fileList: FileList | null) {
-    if (!fileList) return;
-    setDocuments((current) => [
-      ...current,
-      ...Array.from(fileList).map((file) => ({
+    if (!fileList?.length) {
+      setMessage("Файлы не выбраны.");
+      return;
+    }
+
+    const accepted: DraftDocument[] = [];
+    const rejected: string[] = [];
+
+    for (const file of Array.from(fileList)) {
+      const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
+      if (!ACCEPTED_EXTENSIONS.includes(extension)) {
+        rejected.push(`${file.name}: неподдерживаемый формат`);
+        continue;
+      }
+      if (file.size > MAX_FILE_SIZE) {
+        rejected.push(`${file.name}: размер больше 25 МБ`);
+        continue;
+      }
+      accepted.push({
         id: crypto.randomUUID(),
         file,
         category,
         uploaded: false,
-      })),
-    ]);
+      });
+    }
+
+    if (accepted.length) {
+      setDocuments((current) => [...current, ...accepted]);
+      setMessage(`Подготовлено файлов: ${accepted.length}. Нажмите «Сохранить», чтобы загрузить их.`);
+    }
+    if (rejected.length) {
+      setMessage(rejected.join("; "));
+    }
     if (inputRef.current) inputRef.current.value = "";
   }
 
@@ -150,7 +176,11 @@ export function TelegramProjectWorkspace() {
       const projectId = result.project.id;
       setDraft((current) => ({ ...current, id: projectId }));
 
-      for (const document of documents.filter((item) => !item.uploaded)) {
+      const pendingDocuments = documents.filter((item) => !item.uploaded);
+      for (let index = 0; index < pendingDocuments.length; index += 1) {
+        const document = pendingDocuments[index];
+        setMessage(`Загрузка ${index + 1} из ${pendingDocuments.length}: ${document.file.name}`);
+
         const upload = await callTelegramApi<{ path: string; token: string }>("create_upload_url", {
           projectId,
           fileName: document.file.name,
@@ -159,9 +189,9 @@ export function TelegramProjectWorkspace() {
         const storageResult = await supabase.storage
           .from("gi-project-documents")
           .uploadToSignedUrl(upload.path, upload.token, document.file, {
-            contentType: document.file.type || undefined,
+            contentType: document.file.type || "application/octet-stream",
           });
-        if (storageResult.error) throw storageResult.error;
+        if (storageResult.error) throw new Error(`Не удалось загрузить ${document.file.name}: ${storageResult.error.message}`);
 
         await callTelegramApi("register_document", {
           document: {
@@ -175,15 +205,15 @@ export function TelegramProjectWorkspace() {
         });
 
         setDocuments((current) =>
-          current.map((item) =>
-            item.id === document.id ? { ...item, uploaded: true } : item,
-          ),
+          current.map((item) => item.id === document.id ? { ...item, uploaded: true } : item),
         );
       }
 
       const list = await listTelegramProjects();
       setProjects(list.projects);
-      setMessage("Проект и документы сохранены под вашим Telegram-профилем.");
+      setMessage(pendingDocuments.length
+        ? `Проект сохранён. Загружено документов: ${pendingDocuments.length}.`
+        : "Проект сохранён.");
       return projectId;
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Ошибка сохранения проекта.");
@@ -241,28 +271,20 @@ export function TelegramProjectWorkspace() {
               </div>
               <button className="primary-cta justify-center" onClick={startNewProject}><Plus size={16} /> Новый проект</button>
             </div>
-
             <div className="mt-7 rounded-2xl border border-white/10 bg-white/[.025] p-4 text-sm">
               {busy ? <span className="flex items-center gap-2"><LoaderCircle className="animate-spin" size={17} /> Обновляем данные…</span> : message}
             </div>
-
             <div className="mt-6 grid gap-3 md:grid-cols-2">
-              {projects.length === 0 && (
-                <div className="rounded-[24px] border border-dashed border-white/15 p-6 text-sm leading-6 text-mist">Сохранённых проектов пока нет. Создайте первый проект.</div>
-              )}
+              {projects.length === 0 && <div className="rounded-[24px] border border-dashed border-white/15 p-6 text-sm leading-6 text-mist">Сохранённых проектов пока нет. Создайте первый проект.</div>}
               {projects.map((project) => (
                 <button key={project.id} onClick={() => openProject(project)} className="rounded-[24px] border border-white/[.08] bg-white/[.025] p-5 text-left transition hover:border-signal/30">
-                  <div className="flex items-start justify-between gap-3">
-                    <FolderOpen className="shrink-0 text-signal" size={20} />
-                    <span className="rounded-full border border-white/10 px-2 py-1 text-[10px] text-mist">{project.status}</span>
-                  </div>
+                  <div className="flex items-start justify-between gap-3"><FolderOpen className="shrink-0 text-signal" size={20} /><span className="rounded-full border border-white/10 px-2 py-1 text-[10px] text-mist">{project.status}</span></div>
                   <h2 className="mt-4 break-words text-xl font-semibold">{project.name}</h2>
                   <p className="mt-2 text-sm text-mist">{project.region}</p>
                   <p className="mt-4 text-xs text-mist">Документов: {project.gi_project_documents?.length ?? 0} · Проверок: {project.gi_project_checks?.length ?? 0}</p>
                 </button>
               ))}
             </div>
-
             <button className="secondary-cta mt-6 justify-center" onClick={() => void bootstrap()}><RefreshCw size={15} /> Обновить</button>
           </section>
         </div>
@@ -275,10 +297,7 @@ export function TelegramProjectWorkspace() {
       <div className="mx-auto min-h-screen max-w-5xl px-3 py-4 sm:px-6 sm:py-8">
         <section className="glass-surface rounded-[28px] p-5 sm:p-8">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <div className="status-pill"><UserRound size={15} /> {identity.firstName}</div>
-              <h1 className="mt-4 break-words text-3xl font-semibold sm:text-5xl">{draft.id ? "Редактирование проекта" : "Новый проект"}</h1>
-            </div>
+            <div><div className="status-pill"><UserRound size={15} /> {identity.firstName}</div><h1 className="mt-4 break-words text-3xl font-semibold sm:text-5xl">{draft.id ? "Редактирование проекта" : "Новый проект"}</h1></div>
             <button className="secondary-cta justify-center" onClick={() => setMode("list")}>Мои проекты</button>
           </div>
 
@@ -293,13 +312,24 @@ export function TelegramProjectWorkspace() {
 
             <div className="rounded-[24px] border border-white/10 p-4 sm:p-5">
               <Field label="Категория документа"><select value={category} onChange={(event) => setCategory(event.target.value)}>{categories.map((item) => <option key={item}>{item}</option>)}</select></Field>
-              <input ref={inputRef} className="hidden" type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.jpg,.jpeg,.png,.webp" onChange={(event) => addFiles(event.target.files)} />
-              <button className="primary-cta mt-4 w-full justify-center" onClick={() => inputRef.current?.click()}><FileUp size={16} /> Добавить файлы</button>
+              <label className="primary-cta relative mt-4 flex w-full cursor-pointer items-center justify-center overflow-hidden">
+                <FileUp size={16} /> Добавить файлы
+                <input
+                  ref={inputRef}
+                  className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                  type="file"
+                  multiple
+                  accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.jpg,.jpeg,.png,.webp"
+                  onChange={(event) => addFiles(event.currentTarget.files)}
+                  disabled={busy}
+                />
+              </label>
+              <p className="mt-3 text-xs leading-5 text-mist">PDF, Word, Excel, CSV, TXT и изображения. Максимум 25 МБ на файл.</p>
               <div className="mt-4 space-y-2">
                 {documents.map((document) => (
                   <div key={document.id} className="flex items-center gap-3 rounded-xl bg-white/[.03] p-3">
-                    <div className="min-w-0 flex-1"><p className="truncate text-sm">{document.file.name}</p><p className="text-xs text-mist">{document.category} · {document.uploaded ? "сохранён" : "ожидает"}</p></div>
-                    <button aria-label="Удалить файл" onClick={() => setDocuments((current) => current.filter((item) => item.id !== document.id))}><Trash2 size={16} /></button>
+                    <div className="min-w-0 flex-1"><p className="truncate text-sm">{document.file.name}</p><p className="text-xs text-mist">{document.category} · {document.uploaded ? "загружен" : "готов к загрузке"}</p></div>
+                    {!document.uploaded && <button aria-label="Удалить файл" onClick={() => setDocuments((current) => current.filter((item) => item.id !== document.id))}><Trash2 size={16} /></button>}
                   </div>
                 ))}
               </div>
@@ -308,11 +338,11 @@ export function TelegramProjectWorkspace() {
           </div>
 
           <div className="mt-6 rounded-2xl border border-white/10 bg-white/[.025] p-4 text-sm leading-6">
-            {busy ? <span className="flex items-center gap-2"><LoaderCircle className="animate-spin" size={17} /> Выполняется операция…</span> : <span className="flex items-start gap-2"><CheckCircle2 className="mt-0.5 shrink-0" size={17} /> {message}</span>}
+            {busy ? <span className="flex items-center gap-2"><LoaderCircle className="animate-spin" size={17} /> {message}</span> : <span className="flex items-start gap-2"><CheckCircle2 className="mt-0.5 shrink-0" size={17} /> {message}</span>}
           </div>
 
           <div className="mt-5 flex flex-col gap-2 sm:flex-row">
-            <button disabled={busy} onClick={() => void saveProject()} className="secondary-cta justify-center"><Save size={15} /> Сохранить</button>
+            <button disabled={busy} onClick={() => void saveProject()} className="secondary-cta justify-center"><Save size={15} /> Сохранить и загрузить</button>
             <button disabled={busy} onClick={() => void runCheck()} className="primary-cta justify-center">Проверить источники <ArrowRight size={15} /></button>
           </div>
         </section>
@@ -325,9 +355,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   return (
     <label className="mt-3 block">
       <span className="mb-2 block text-xs text-mist">{label}</span>
-      <div className="[&>input]:w-full [&>input]:rounded-xl [&>input]:bg-black/20 [&>input]:p-3 [&>input]:outline-none [&>select]:w-full [&>select]:rounded-xl [&>select]:bg-[#11161a] [&>select]:p-3 [&>select]:outline-none">
-        {children}
-      </div>
+      <div className="[&>input]:w-full [&>input]:rounded-xl [&>input]:bg-black/20 [&>input]:p-3 [&>input]:outline-none [&>select]:w-full [&>select]:rounded-xl [&>select]:bg-[#11161a] [&>select]:p-3 [&>select]:outline-none">{children}</div>
     </label>
   );
 }
