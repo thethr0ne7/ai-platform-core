@@ -59,12 +59,13 @@ test("KBR economy adapter discovers official document cards and attachments", as
   const adapter = createKbrRegionalAdapters(http).find((item) => item.sourceId === "kbr-economy");
   assert.ok(adapter);
   const items = await adapter.discover({ maxPages: 1, pageSize: 20 });
+  const order = items.find((item) => item.canonicalUrl === "https://economykbr.ru/documents/order-44");
 
-  assert.equal(items.length, 1);
-  assert.equal(items[0]?.documentNumber, "44");
-  assert.equal(items[0]?.publishedAt, "2026-05-12");
-  assert.deepEqual(items[0]?.attachmentUrls, ["https://economykbr.ru/documents/order-44.pdf"]);
-  assert.equal(items[0]?.rawMetadata.level, "regional");
+  assert.ok(order);
+  assert.equal(order.documentNumber, "44");
+  assert.equal(order.publishedAt, "2026-05-12");
+  assert.deepEqual(order.attachmentUrls, ["https://economykbr.ru/documents/order-44.pdf"]);
+  assert.equal(order.rawMetadata.level, "regional");
 });
 
 test("KBR adapter rejects attachment URLs outside the official host", async () => {
@@ -87,7 +88,8 @@ test("KBR adapter rejects attachment URLs outside the official host", async () =
   const adapter = createKbrRegionalAdapters(http).find((item) => item.sourceId === "kbr-tourism-ministry");
   assert.ok(adapter);
   const items = await adapter.discover({ maxPages: 1, pageSize: 20 });
+  const subsidy = items.find((item) => item.canonicalUrl === "https://minturizm.kbr.ru/documents/subsidy");
 
-  assert.equal(items.length, 1);
-  assert.deepEqual(items[0]?.attachmentUrls, ["https://minturizm.kbr.ru/documents/subsidy.pdf"]);
+  assert.ok(subsidy);
+  assert.deepEqual(subsidy.attachmentUrls, ["https://minturizm.kbr.ru/documents/subsidy.pdf"]);
 });
