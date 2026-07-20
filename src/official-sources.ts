@@ -56,7 +56,7 @@ export const INITIAL_OFFICIAL_SOURCES: readonly OfficialSourceDefinition[] = [
     id: "nalchik-administration",
     name: "Местная администрация городского округа Нальчик",
     baseUrl: "https://admnalchik.ru/",
-    level: "regional",
+    level: "municipal",
     region: "Кабардино-Балкарская Республика / городской округ Нальчик",
     authority: "Местная администрация городского округа Нальчик",
     discovery: ["html", "sitemap", "document"],
