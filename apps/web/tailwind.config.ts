@@ -10,6 +10,7 @@ const config: Config = {
         line: "#24262b",
         mist: "#a6a8ad",
         signal: "#b8ff5a",
+        violet: "#8b5cff",
         amber: "#ffcf66",
         danger: "#ff7a7a"
       },
