@@ -152,7 +152,6 @@ export function captureOfficialSnapshot(source: OfficialSourceDefinition, artifa
   if (!source.allowedContentTypes.includes(artifact.contentType)) throw new Error(`Unsupported content type ${artifact.contentType}`);
   const text = normalizeText(artifact.normalizedText);
   if (text.length < 80) throw new Error("Normalized official document text is too short");
-
   return {
     id: source.id,
     authority: source.authority,
@@ -172,7 +171,7 @@ export function captureOfficialSnapshot(source: OfficialSourceDefinition, artifa
   };
 }
 
-function validateConfidence(value: number | undefined): boolean {
+function validConfidence(value: number | undefined): boolean {
   return value === undefined || (Number.isFinite(value) && value >= 0 && value <= 1);
 }
 
@@ -183,14 +182,12 @@ export function validateFieldEvidence(
   const verified: VerifiedFieldEvidence[] = [];
   const rejected: RejectedFieldEvidence[] = [];
   const snapshotHash = sha256(snapshot.text);
-
   for (const item of evidence) {
-    if (!validateConfidence(item.confidence)) {
+    if (!validConfidence(item.confidence)) {
       rejected.push({ ...item, verified: false, reason: "invalid-confidence" });
       continue;
     }
-    const exactAtOffset = snapshot.text.slice(item.charStart, item.charEnd) === item.quote;
-    if (exactAtOffset) {
+    if (snapshot.text.slice(item.charStart, item.charEnd) === item.quote) {
       verified.push({ ...item, verified: true, quoteHash: sha256(item.quote), snapshotHash });
       continue;
     }
@@ -227,12 +224,13 @@ function evidenceLinks(snapshot: OfficialDocumentSnapshot, evidence: readonly Ve
   }));
 }
 
-function requireGroundedFields(proposal: StructuredMeasureProposal, verified: readonly VerifiedFieldEvidence[]): void {
+function groundedPaths(proposal: StructuredMeasureProposal, verified: readonly VerifiedFieldEvidence[]): Set<string> {
   const grounded = new Set(verified.map((item) => item.fieldPath));
   const required = ["measure.title", "measure.instrument", "measure.applicantTypes", "measure.eligibleCosts"];
   const missing = required.filter((field) => !grounded.has(field));
   if (missing.length > 0) throw new Error(`Required measure fields lack verified evidence: ${missing.join(", ")}`);
   if (!proposal.measure.id.trim()) throw new Error("Measure id is required");
+  return grounded;
 }
 
 export async function runLiveGovernmentSupportPipeline(input: {
@@ -245,40 +243,38 @@ export async function runLiveGovernmentSupportPipeline(input: {
   const snapshot = captureOfficialSnapshot(input.source, artifact);
   const extraction = await input.extractor.extract(snapshot);
   const { verified, rejected } = validateFieldEvidence(snapshot, extraction.proposal.evidence);
-  requireGroundedFields(extraction.proposal, verified);
-
+  const grounded = groundedPaths(extraction.proposal, verified);
+  const proposed = extraction.proposal.measure;
   const measure: SupportMeasure = {
-    id: extraction.proposal.measure.id,
-    title: extraction.proposal.measure.title,
+    id: proposed.id,
+    title: proposed.title,
     authority: snapshot.authority,
-    instrument: extraction.proposal.measure.instrument,
+    instrument: proposed.instrument,
     jurisdiction: snapshot.jurisdiction,
-    sectors: [...extraction.proposal.measure.sectors],
-    applicantTypes: [...extraction.proposal.measure.applicantTypes],
-    objectives: [...extraction.proposal.measure.objectives],
-    eligibleCosts: [...extraction.proposal.measure.eligibleCosts],
-    ...(extraction.proposal.measure.maxAmount !== undefined ? { maxAmount: extraction.proposal.measure.maxAmount } : {}),
-    ...(extraction.proposal.measure.cofinancingPercent !== undefined ? { cofinancingPercent: extraction.proposal.measure.cofinancingPercent } : {}),
-    ...(extraction.proposal.measure.validFrom ? { validFrom: extraction.proposal.measure.validFrom } : {}),
-    ...(extraction.proposal.measure.validTo ? { validTo: extraction.proposal.measure.validTo } : {}),
-    conditions: [...extraction.proposal.measure.conditions],
-    exclusions: [...extraction.proposal.measure.exclusions],
+    sectors: grounded.has("measure.sectors") ? [...proposed.sectors] : [],
+    applicantTypes: [...proposed.applicantTypes],
+    objectives: grounded.has("measure.objectives") ? [...proposed.objectives] : [],
+    eligibleCosts: [...proposed.eligibleCosts],
+    ...(grounded.has("measure.maxAmount") && proposed.maxAmount !== undefined ? { maxAmount: proposed.maxAmount } : {}),
+    ...(grounded.has("measure.cofinancingPercent") && proposed.cofinancingPercent !== undefined
+      ? { cofinancingPercent: proposed.cofinancingPercent }
+      : {}),
+    ...(grounded.has("measure.validFrom") && proposed.validFrom ? { validFrom: proposed.validFrom } : {}),
+    ...(grounded.has("measure.validTo") && proposed.validTo ? { validTo: proposed.validTo } : {}),
+    conditions: grounded.has("measure.conditions") ? [...proposed.conditions] : [],
+    exclusions: grounded.has("measure.exclusions") ? [...proposed.exclusions] : [],
     evidence: evidenceLinks(snapshot, verified)
   };
-
-  const rawResponseHash = sha256(JSON.stringify(extraction.rawResponse));
   const normalizedTextHash = sha256(snapshot.text);
-  const snapshotHash = String(snapshot.metadata?.rawSha256 ?? normalizedTextHash);
   const provenance: ExtractionProvenance = {
     model: extraction.model,
     schemaVersion: extraction.schemaVersion,
     promptHash: extraction.promptHash,
-    rawResponseHash,
-    snapshotHash,
+    rawResponseHash: sha256(JSON.stringify(extraction.rawResponse)),
+    snapshotHash: String(snapshot.metadata?.rawSha256 ?? normalizedTextHash),
     normalizedTextHash
   };
   const recommendation = recommendSupportMeasure(measure, input.project);
-
   return {
     source: input.source,
     snapshot,
