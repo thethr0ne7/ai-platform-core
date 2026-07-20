@@ -117,8 +117,10 @@ function validateClaim(claim: IntelligenceClaim, evidenceById: ReadonlyMap<strin
 }
 
 function claimIsSupported(claim: IntelligenceClaim, evidenceById: ReadonlyMap<string, IntelligenceEvidence>): boolean {
-  if (claim.level !== "fact") return claim.evidenceIds.length > 0;
-  return claim.evidenceIds.length > 0 && claim.evidenceIds.every((id) => evidenceById.get(id)?.verified === true);
+  if (claim.evidenceIds.length === 0) return false;
+  const verifiedCount = claim.evidenceIds.filter((id) => evidenceById.get(id)?.verified === true).length;
+  if (claim.level === "fact") return verifiedCount === claim.evidenceIds.length;
+  return verifiedCount > 0;
 }
 
 function assessLens(
