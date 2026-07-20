@@ -1,1 +1,1 @@
-export { PersistentProjectWorkspace as IntelligenceWorkspace } from "./persistent-project-workspace";
+export { TelegramProjectWorkspace as IntelligenceWorkspace } from "./telegram-project-workspace";
