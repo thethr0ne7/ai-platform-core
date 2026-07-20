@@ -103,9 +103,10 @@ test("one product traces a support change, forecasts bounded signals and recomme
   assert.deepEqual(result.signals[2]?.horizonMonths, [6, 24]);
   assert.equal((result.signals[2]?.falsificationCriteria.length ?? 0) > 0, true);
 
-  assert.equal(result.recommendation.status, "potentially-eligible");
+  assert.equal(result.recommendation.status, "eligible");
   assert.equal(result.recommendation.fitScore, 100);
   assert.equal(result.recommendation.blockers.length, 0);
+  assert.equal(result.recommendation.uncertainty.length, 1);
   assert.equal(result.recommendation.evidence[0]?.status, "verified");
   assert.equal(result.recommendation.evidence[0]?.sourceUrl, currentSnapshot.sourceUrl);
 });
