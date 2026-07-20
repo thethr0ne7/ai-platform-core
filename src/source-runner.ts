@@ -39,12 +39,12 @@ export class SourceIngestionRunner {
   ) {}
 
   async run(window: DiscoveryWindow = {}): Promise<SourceRunResult[]> {
-    const ordered = this.adapters.toSorted((a, b) => sourceRank(this.sources.get(a.sourceId)) - sourceRank(this.sources.get(b.sourceId)));
+    const ordered = [...this.adapters].sort(
+      (a, b) => sourceRank(this.sources.get(a.sourceId)) - sourceRank(this.sources.get(b.sourceId)),
+    );
     const results: SourceRunResult[] = [];
 
-    for (const adapter of ordered) {
-      results.push(await this.runAdapter(adapter, window));
-    }
+    for (const adapter of ordered) results.push(await this.runAdapter(adapter, window));
     return results;
   }
 
@@ -60,26 +60,17 @@ export class SourceIngestionRunner {
         try {
           this.sources.assertOfficialUrl(source.id, item.canonicalUrl);
           for (const attachment of item.attachmentUrls) this.sources.assertOfficialUrl(source.id, attachment);
-
           const extracted = await this.extraction.extract(item);
-          if (!extracted.text.trim()) {
-            result.skipped += 1;
-            continue;
-          }
+          if (!extracted.text.trim()) { result.skipped += 1; continue; }
           const previousText = await this.persistence.getLatestText(item.canonicalUrl);
-          if (previousText?.trim() === extracted.text.trim()) {
-            result.skipped += 1;
-            continue;
-          }
-
-          const evidence = createEvidenceRecord({
+          if (previousText?.trim() === extracted.text.trim()) { result.skipped += 1; continue; }
+          await this.persistence.saveEvidence(createEvidenceRecord({
             source,
             item,
             checkedAt,
             text: extracted.text,
             extractionMethod: extracted.method,
-          });
-          await this.persistence.saveEvidence(evidence);
+          }));
           result.persisted += 1;
         } catch {
           result.failed += 1;
@@ -111,15 +102,21 @@ export class BasicExtractionGateway implements ExtractionGateway {
       return { text, method: decision.method };
     }
 
-    const decision = decideExtraction({ url: target, contentType, fileName: new URL(target).pathname.split("/").pop() });
-    if (decision.requiresOcr) {
-      throw new Error("Документ требует OCR worker; синхронный runner не выполняет OCR внутри основного процесса");
-    }
+    const fileName = new URL(target).pathname.split("/").pop();
+    const decision = decideExtraction({
+      url: target,
+      contentType,
+      ...(fileName ? { fileName } : {}),
+    });
+    if (decision.requiresOcr) throw new Error("Документ требует OCR worker; синхронный runner не выполняет OCR внутри основного процесса");
     throw new Error(`Для ${decision.format} требуется подключённый native extraction worker`);
   }
 }
 
-export function createDefaultSourceRunner(persistence: SourcePersistence, extraction: ExtractionGateway = new BasicExtractionGateway()): SourceIngestionRunner {
+export function createDefaultSourceRunner(
+  persistence: SourcePersistence,
+  extraction: ExtractionGateway = new BasicExtractionGateway(),
+): SourceIngestionRunner {
   return new SourceIngestionRunner(createRealAdapters(), extraction, persistence);
 }
 
