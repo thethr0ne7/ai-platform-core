@@ -1,13 +1,18 @@
 "use client";
 
-import * as Tabs from "@radix-ui/react-tabs";
 import { animate, motion } from "motion/react";
 import {
-  AlertTriangle, ArrowUpRight, BadgeCheck, Bell, Bot, BriefcaseBusiness,
-  CircleHelp, FileSearch, Gauge, Home, Landmark, MapPinned, Menu, Network,
-  Search, ShieldCheck, Sparkles, Target, WalletCards
+  AlertTriangle, ArrowRight, BadgeCheck, Bell, Bot, BrainCircuit, BriefcaseBusiness,
+  CalendarClock, Check, ChevronRight, CircleHelp, FileDiff, FileSearch, Gauge,
+  GitBranch, Home, Landmark, Menu, Network, Radar, Search, ShieldCheck, Sparkles,
+  Target, X
 } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
+
+const modes = [
+  [Gauge, "Decide"], [FileSearch, "Investigate"], [Radar, "Monitor"],
+  [BrainCircuit, "Forecast"], [GitBranch, "Knowledge"]
+] as const;
 
 const lenses = [
   ["Стратегия", 72], ["Территория", 88], ["Экономика", 54], ["Финансы", 38],
@@ -16,21 +21,77 @@ const lenses = [
   ["Риски", 41], ["Прогноз", 36]
 ] as const;
 
-const evidence = [
-  { title: "Карта доходности агросервиса КБР", type: "Проектный документ", state: "Проверено" },
-  { title: "Письма о намерениях фермеров", type: "Рыночное доказательство", state: "Нужно собрать" },
-  { title: "Правила регионального конкурса", type: "Официальный документ", state: "Не найдено" }
+const evidenceItems = [
+  {
+    id: "evidence-order-88",
+    title: "Перечень затрат по гранту «Агротуризм»",
+    type: "Официальный документ",
+    state: "Проверено",
+    authority: "Минсельхоз России",
+    document: "Приказ от 17.02.2026 № 88",
+    source: "publication.pravo.gov.ru",
+    quote: "Перечень направлений расходов включает создание и развитие объектов сельского туризма.",
+    claim: "Проект может рассматриваться в контуре поддержки агротуризма.",
+    captured: "25 марта 2026",
+    confidence: 92
+  },
+  {
+    id: "evidence-demand-map",
+    title: "Карта доходности агросервиса КБР",
+    type: "Проектный документ",
+    state: "Проверено",
+    authority: "Проектная аналитика",
+    document: "Карта районов и спроса",
+    source: "Внутренний документ проекта",
+    quote: "Баксанский район получил наивысший рейтинг по концентрации садов, повторяемости работ и логистике.",
+    claim: "Баксанский кластер выглядит приоритетной зоной запуска.",
+    captured: "5 марта 2026",
+    confidence: 78
+  },
+  {
+    id: "evidence-regional-rules",
+    title: "Правила регионального конкурса КБР",
+    type: "Официальный документ",
+    state: "Не найдено",
+    authority: "Минсельхоз КБР",
+    document: "Актуальный конкурсный порядок",
+    source: "Требуется официальный источник",
+    quote: "Точная цитата отсутствует: документ ещё не зафиксирован в Evidence Locker.",
+    claim: "Нельзя подтвердить форму заявителя, сроки и полный перечень допустимых расходов.",
+    captured: "Не зафиксировано",
+    confidence: 18
+  }
 ] as const;
 
-const navigation = [
-  [Gauge, "Главная"], [BriefcaseBusiness, "Проект"], [Landmark, "Поддержка"],
-  [FileSearch, "Документы"], [ShieldCheck, "Доказательства"], [MapPinned, "Карта"]
+const timeline = [
+  { date: "25 мар", title: "Опубликован приказ № 88", detail: "Обновлён перечень затрат по агротуризму.", tone: "signal" },
+  { date: "18 июл", title: "Зафиксирован проектный профиль", detail: "КФХ, техника, агросервис и будущий агротуризм.", tone: "violet" },
+  { date: "Сегодня", title: "Обнаружены 3 критических пробела", detail: "Право, региональный конкурс и финансовая модель.", tone: "danger" }
 ] as const;
 
 export function IntelligenceWorkspace() {
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [selectedEvidenceId, setSelectedEvidenceId] = useState(evidenceItems[0].id);
+  const [activeMode, setActiveMode] = useState("Decide");
+
+  const selectedEvidence = useMemo(
+    () => evidenceItems.find((item) => item.id === selectedEvidenceId) ?? evidenceItems[0],
+    [selectedEvidenceId]
+  );
+
   useEffect(() => {
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    animate("[data-progress]", { scaleX: [0, 1] }, { duration: 0.7, delay: 0.05 });
+    if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      animate("[data-progress]", { scaleX: [0, 1] }, { duration: 0.7, delay: 0.05 });
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setPaletteOpen((value) => !value);
+      }
+      if (event.key === "Escape") setPaletteOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
   return (
@@ -39,13 +100,18 @@ export function IntelligenceWorkspace() {
       <div className="workspace-frame">
         <aside className="desktop-sidebar glass-surface">
           <Brand />
+          <p className="sidebar-label">Operating modes</p>
           <nav className="space-y-1 text-sm">
-            {navigation.map(([Icon, label], index) => <button key={label} className={`nav-item ${index === 0 ? "nav-active" : ""}`}><Icon size={17} /><span>{label}</span></button>)}
+            {modes.map(([Icon, label]) => (
+              <button key={label} onClick={() => setActiveMode(label)} className={`nav-item ${activeMode === label ? "nav-active" : ""}`}>
+                <Icon size={17} /><span>{label}</span>
+              </button>
+            ))}
           </nav>
           <div className="runtime-card">
             <div className="mb-3 flex items-center gap-2 text-sm"><Bot size={16} className="text-signal" /> Factory Runtime</div>
             <p className="text-xs leading-5 text-mist">Evidence Lock, Intelligence Lenses и Quality Gates активны.</p>
-            <div className="mt-4 flex items-center gap-2 text-[11px] text-signal"><span className="h-2 w-2 rounded-full bg-signal shadow-[0_0_14px_rgba(78,255,167,.8)]" /> Система активна</div>
+            <div className="mt-4 flex items-center gap-2 text-[11px] text-signal"><span className="signal-dot" /> Система активна</div>
           </div>
         </aside>
 
@@ -53,77 +119,83 @@ export function IntelligenceWorkspace() {
           <header className="topbar glass-surface">
             <div className="flex min-w-0 items-center gap-3">
               <button className="icon-button xl:hidden" aria-label="Открыть меню"><Menu size={19} /></button>
-              <div className="min-w-0"><p className="text-[10px] uppercase tracking-[.22em] text-mist">Проект / КБР</p><h1 className="truncate text-sm font-semibold sm:text-base">Агросервис: техника → производство → агротуризм</h1></div>
+              <div className="min-w-0"><p className="text-[10px] uppercase tracking-[.22em] text-mist">Decision OS / {activeMode}</p><h1 className="truncate text-sm font-semibold sm:text-base">Агросервис: техника → производство → агротуризм</h1></div>
             </div>
-            <div className="hidden min-w-[280px] max-w-xl flex-1 md:block"><div className="search-shell"><Search size={16} /><span>Поиск мер поддержки, документов, программ...</span><kbd>⌘ K</kbd></div></div>
+            <button className="command-trigger" onClick={() => setPaletteOpen(true)}><Search size={16} /><span>Найти решение, документ или действие</span><kbd>⌘ K</kbd></button>
             <div className="flex items-center gap-2"><button className="icon-button hidden sm:grid"><Bell size={17} /></button><button className="icon-button hidden sm:grid"><CircleHelp size={17} /></button><button className="avatar">АК</button></div>
           </header>
 
-          <div className="mobile-context glass-surface md:hidden"><Search size={16} /><span>Поиск по платформе</span></div>
+          <button className="mobile-context glass-surface md:hidden" onClick={() => setPaletteOpen(true)}><Search size={16} /><span>Командный поиск</span><kbd>⌘K</kbd></button>
 
           <div className="decision-strip glass-surface">
             <div><span className="signal-dot" /> Анализ обновлён</div>
-            <div className="hidden sm:block">8 подтверждённых фактов</div>
-            <div className="hidden lg:block">3 критических пробела</div>
-            <button>Открыть трассировку <ArrowUpRight size={14} /></button>
+            <div className="hidden sm:flex">8 подтверждённых фактов</div>
+            <div className="hidden lg:flex">3 критических пробела</div>
+            <button onClick={() => setSelectedEvidenceId("evidence-order-88")}>Открыть трассировку <ArrowRight size={14} /></button>
           </div>
 
-          <div className="bento-grid">
-            <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="hero-bento glass-surface">
+          <div className="decision-grid">
+            <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="decision-hero glass-surface">
               <div className="hero-mesh" />
-              <div className="relative z-10 grid gap-8 lg:grid-cols-[minmax(0,1fr)_180px] lg:items-center">
-                <div>
-                  <div className="status-pill"><AlertTriangle size={14} /> Требуются доказательства</div>
-                  <h2 className="hero-title">Возможность сильная.<br /><span>Решение пока нельзя принимать уверенно.</span></h2>
-                  <p className="hero-copy">Платформа обнаружила высокий потенциал территориального кластера и повторяемых операций, но не подтверждены актуальные правила господдержки и финансовая устойчивость.</p>
-                  <div className="mt-6 flex flex-wrap gap-2"><button className="primary-cta">Собрать недостающие данные <ArrowUpRight size={15} /></button><button className="secondary-cta">Открыть Decision Brief</button></div>
-                </div>
-                <div className="score-ring"><span className="text-4xl font-semibold">62%</span><span className="text-[10px] uppercase tracking-[.18em] text-mist">готовность</span></div>
+              <div className="relative z-10">
+                <div className="status-pill"><AlertTriangle size={14} /> Решение: пока рано</div>
+                <p className="decision-question">Можно ли запускать проект сейчас?</p>
+                <h2 className="hero-title"><span>Нет — сначала нужно закрыть три критических пробела.</span></h2>
+                <p className="hero-copy">Потенциал проекта высокий, но текущих доказательств недостаточно для безопасного решения по гранту, юридической форме и финансированию.</p>
+                <div className="mt-6 flex flex-wrap gap-2"><button className="primary-cta">Закрыть первый блокер <ArrowRight size={15} /></button><button className="secondary-cta">Сформировать Decision Brief</button></div>
               </div>
-              <div className="relative z-10 mt-8 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                <Metric label="Покрытие доказательств" value="67%" note="8 из 12 ключевых фактов" />
-                <Metric label="Критические блокеры" value="3" note="право, финансы, конкурс" />
-                <Metric label="Возможности" value="4" note="кластер, спрос, повторяемость" />
-                <Metric label="Интеллект-контуры" value="14" note="активно" />
-              </div>
+              <div className="decision-score"><div className="score-ring"><span className="text-4xl font-semibold">62%</span><span className="text-[10px] uppercase tracking-[.18em] text-mist">уверенность</span></div><p>Повторная проверка после получения правил конкурса и КП поставщиков.</p></div>
             </motion.section>
 
-            <section className="actions-bento glass-surface"><SectionHead eyebrow="Next best actions" title="Следующие действия" icon={<Target size={18} />} /><div className="space-y-3"><Action index="1" title="Проверить правила конкурса" text="Найти актуальный порядок Минсельхоза КБР." urgent /><Action index="2" title="Собрать спрос" text="10–15 интервью и 5–10 писем о намерениях." /><Action index="3" title="Подтвердить экономику" text="Получить КП и проверить cash flow." /></div></section>
+            <section className="next-action-card glass-surface">
+              <SectionHead eyebrow="Next action" title="Первое действие" icon={<Target size={18} />} />
+              <div className="action-priority"><span>01</span><div><p>Найти актуальный порядок конкурса Минсельхоза КБР</p><small>Он определит форму заявителя, сроки, лимиты и допустимые расходы.</small></div></div>
+              <button className="full-action">Начать расследование <ArrowRight size={15} /></button>
+            </section>
 
-            <Tabs.Root defaultValue="lenses" className="lenses-bento glass-surface">
-              <Tabs.List className="tabs-list" aria-label="Разделы аналитики"><Tabs.Trigger className="tab-trigger" value="lenses">Контуры</Tabs.Trigger><Tabs.Trigger className="tab-trigger" value="support">Поддержка</Tabs.Trigger><Tabs.Trigger className="tab-trigger" value="risks">Риски</Tabs.Trigger></Tabs.List>
-              <Tabs.Content value="lenses" className="pt-5"><div className="mb-5 flex items-end justify-between"><div><p className="eyebrow">14 контуров</p><h3 className="section-title">Карта готовности решения</h3></div><span className="text-xs text-mist">Сейчас</span></div><div className="lens-grid">{lenses.map(([name, value]) => <LensCard key={name} name={name} value={value} />)}</div></Tabs.Content>
-              <Tabs.Content value="support" className="pt-5"><SupportCard /></Tabs.Content>
-              <Tabs.Content value="risks" className="space-y-3 pt-5">{["Логистика свыше 40 км может снизить маржу", "Смета не подтверждена коммерческими предложениями", "Юридическая форма не сверена с порядком конкурса"].map((item) => <div key={item} className="risk-row"><AlertTriangle size={17} /><span>{item}</span></div>)}</Tabs.Content>
-            </Tabs.Root>
+            <section className="evidence-explorer glass-surface">
+              <SectionHead eyebrow="Evidence explorer" title="Почему система так решила" icon={<ShieldCheck size={18} />} />
+              <div className="evidence-layout">
+                <div className="evidence-list">
+                  {evidenceItems.map((item) => <button key={item.id} onClick={() => setSelectedEvidenceId(item.id)} className={`evidence-select ${selectedEvidenceId === item.id ? "active" : ""}`}><span className={item.state === "Проверено" ? "evidence-state verified" : "evidence-state missing"} /><div><p>{item.title}</p><small>{item.type} · {item.state}</small></div><ChevronRight size={15} /></button>)}
+                </div>
+                <article className="evidence-detail">
+                  <div className="evidence-detail-head"><div><p className="eyebrow">Claim</p><h3>{selectedEvidence.claim}</h3></div><span>{selectedEvidence.confidence}%</span></div>
+                  <blockquote>“{selectedEvidence.quote}”</blockquote>
+                  <dl><div><dt>Документ</dt><dd>{selectedEvidence.document}</dd></div><div><dt>Орган</dt><dd>{selectedEvidence.authority}</dd></div><div><dt>Источник</dt><dd>{selectedEvidence.source}</dd></div><div><dt>Зафиксировано</dt><dd>{selectedEvidence.captured}</dd></div></dl>
+                  <button className="trace-button">Открыть полную трассировку <ArrowRight size={14} /></button>
+                </article>
+              </div>
+            </section>
 
-            <section className="blockers-bento glass-surface"><SectionHead eyebrow="Decision blockers" title="Критические блокеры" icon={<AlertTriangle size={18} />} /><div className="space-y-3"><Blocker tone="danger" title="Региональный конкурс КБР" text="Правила конкурса не найдены или требуют обновления." /><Blocker tone="danger" title="Финансовая модель" text="Не подтверждены CAPEX, OPEX и денежный поток." /><Blocker tone="amber" title="Правовое соответствие" text="Требуется проверка формы КФХ/ООО и ограничений." /></div></section>
+            <section className="timeline-card glass-surface">
+              <SectionHead eyebrow="Monitor" title="Что изменилось" icon={<CalendarClock size={18} />} />
+              <div className="timeline-list">{timeline.map((item) => <div className="timeline-row" key={item.title}><span className={`timeline-dot ${item.tone}`} /><time>{item.date}</time><div><p>{item.title}</p><small>{item.detail}</small></div></div>)}</div>
+              <button className="text-action">Открыть полный Timeline <ArrowRight size={14} /></button>
+            </section>
 
-            <section className="support-bento glass-surface"><SectionHead eyebrow="Support matching" title="Подходящие меры поддержки" icon={<Landmark size={18} />} /><div className="space-y-3"><SupportRow title="Агростартап" source="Минсельхоз РФ" score={67} /><SupportRow title="Лизинг сельхозтехники" source="Росагролизинг" score={61} /><SupportRow title="Субсидии на технику" source="КБР" score={48} /></div></section>
+            <section className="brief-card glass-surface">
+              <SectionHead eyebrow="Decision brief" title="Краткий итог" icon={<FileDiff size={18} />} />
+              <div className="brief-status"><AlertTriangle size={18} /><div><p>Статус: недостаточно доказательств</p><small>Проект не отклонён. Решение отложено до проверки обязательных условий.</small></div></div>
+              <div className="brief-columns"><BriefBlock title="Уже подтверждено" icon={<Check size={16} />} items={["Сильный территориальный кластер", "Повторяемые операции", "Связь с агротуризмом"]} /><BriefBlock title="Блокирует решение" icon={<AlertTriangle size={16} />} items={["Правила конкурса КБР", "Финансовая модель", "Форма КФХ/ООО"]} /></div>
+            </section>
 
-            <section className="evidence-bento glass-surface"><SectionHead eyebrow="Evidence locker" title="Доказательства" icon={<BadgeCheck size={18} />} /><div className="space-y-3">{evidence.map((item) => <EvidenceRow key={item.title} {...item} />)}</div></section>
-
-            <section className="finance-bento glass-surface"><div className="flex items-center gap-3"><div className="icon-tile"><WalletCards size={20} /></div><div><p className="text-sm font-medium">Финансовый контур</p><p className="text-xs text-mist">Критическое покрытие: 38%</p></div></div><div className="mt-5 h-2 overflow-hidden rounded-full bg-white/5"><div data-progress className="h-full origin-left rounded-full bg-amber" style={{ width: "38%" }} /></div><p className="mt-4 text-xs leading-5 text-mist">До решения нужны коммерческие предложения, сценарии загрузки и проверка кассового разрыва.</p></section>
+            <section className="lens-card-wide glass-surface">
+              <SectionHead eyebrow="Intelligence lenses" title="Покрытие решения" icon={<Sparkles size={18} />} />
+              <div className="lens-grid">{lenses.map(([name, value]) => <LensCard key={name} name={name} value={value} />)}</div>
+            </section>
           </div>
         </section>
       </div>
 
-      <nav className="mobile-dock glass-surface xl:hidden" aria-label="Мобильная навигация">
-        <button className="dock-active"><Home size={18} /><span>Главная</span></button>
-        <button><BriefcaseBusiness size={18} /><span>Проект</span></button>
-        <button><Landmark size={18} /><span>Поддержка</span></button>
-        <button><ShieldCheck size={18} /><span>Evidence</span></button>
-      </nav>
+      <nav className="mobile-dock glass-surface xl:hidden" aria-label="Мобильная навигация">{modes.slice(0, 4).map(([Icon, label]) => <button key={label} onClick={() => setActiveMode(label)} className={activeMode === label ? "dock-active" : ""}><Icon size={18} /><span>{label}</span></button>)}</nav>
+
+      {paletteOpen && <div className="palette-backdrop" role="presentation" onMouseDown={() => setPaletteOpen(false)}><motion.div initial={{ opacity: 0, scale: .98, y: -8 }} animate={{ opacity: 1, scale: 1, y: 0 }} className="command-palette glass-surface" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}><div className="palette-search"><Search size={18} /><input autoFocus placeholder="Найти решение, документ или действие..." /><button onClick={() => setPaletteOpen(false)}><X size={18} /></button></div><div className="palette-section"><p>Operating modes</p>{modes.map(([Icon, label]) => <button key={label} onClick={() => { setActiveMode(label); setPaletteOpen(false); }}><Icon size={17} /><span>{label}</span><kbd>↵</kbd></button>)}</div><div className="palette-section"><p>Быстрые действия</p><button><FileSearch size={17} /><span>Проверить правила конкурса КБР</span></button><button><BriefcaseBusiness size={17} /><span>Открыть профиль проекта</span></button><button><Landmark size={17} /><span>Найти меры поддержки</span></button></div></motion.div></div>}
     </main>
   );
 }
 
-function Brand() { return <div className="mb-9 flex items-center gap-3 px-2"><div className="brand-mark"><Network size={19} /></div><div><p className="text-sm font-semibold">GovIntelligence</p><p className="text-xs text-mist">Decision operating system</p></div></div>; }
-function SectionHead({ eyebrow, title, icon }: { eyebrow: string; title: string; icon: React.ReactNode }) { return <div className="mb-5 flex items-center justify-between"><div><p className="eyebrow">{eyebrow}</p><h3 className="section-title">{title}</h3></div><div className="text-signal">{icon}</div></div>; }
-function Metric({ label, value, note }: { label: string; value: string; note: string }) { return <div className="metric"><p className="text-xs text-mist">{label}</p><p className="mt-2 text-2xl font-semibold">{value}</p><p className="mt-1 text-xs text-mist">{note}</p></div>; }
-function LensCard({ name, value }: { name: string; value: number }) { const tone = value >= 70 ? "bg-signal" : value >= 50 ? "bg-amber" : "bg-danger"; return <div className="lens-card"><div className="flex items-center justify-between"><span className="text-sm">{name}</span><span className="text-xs text-mist">{value}%</span></div><div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/5"><div data-progress className={`h-full origin-left rounded-full ${tone}`} style={{ width: `${value}%` }} /></div></div>; }
-function Action({ index, title, text, urgent = false }: { index: string; title: string; text: string; urgent?: boolean }) { return <button className="action-row"><span className={urgent ? "action-index urgent" : "action-index"}>{index}</span><span className="text-left"><span className="block text-sm font-medium">{title}</span><span className="mt-1 block text-xs leading-5 text-mist">{text}</span></span><ArrowUpRight size={16} className="ml-auto shrink-0 text-mist" /></button>; }
-function Blocker({ tone, title, text }: { tone: "danger" | "amber"; title: string; text: string }) { return <div className={`blocker-row ${tone}`}><AlertTriangle size={17} /><div><p className="text-sm font-medium">{title}</p><p className="mt-1 text-xs leading-5 text-mist">{text}</p></div></div>; }
-function SupportRow({ title, source, score }: { title: string; source: string; score: number }) { return <div className="support-row"><div className="icon-tile"><Landmark size={17} /></div><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{title}</p><p className="text-xs text-mist">{source}</p></div><span className="score-badge">{score}%</span></div>; }
-function EvidenceRow({ title, type, state }: { title: string; type: string; state: string }) { const stateClass = state === "Проверено" ? "text-signal" : state === "Не найдено" ? "text-danger" : "text-amber"; return <div className="evidence-row"><FileSearch size={17} className="mt-0.5 shrink-0 text-mist" /><div><p className="text-sm">{title}</p><p className="mt-1 text-xs text-mist">{type}</p><p className={`mt-2 text-[10px] uppercase tracking-wider ${stateClass}`}>{state}</p></div></div>; }
-function SupportCard() { return <div className="support-highlight"><div className="flex items-center gap-3"><div className="icon-tile"><Landmark size={19} /></div><div><p className="font-medium">Грант «Агротуризм»</p><p className="text-sm text-mist">Предварительное соответствие по целям проекта</p></div></div><p className="mt-4 text-sm leading-6 text-mist">Нужна проверка актуального конкурсного порядка, формы заявителя и допустимых расходов.</p></div>; }
+function Brand() { return <div className="mb-8 flex items-center gap-3 px-2"><div className="brand-mark"><Network size={19} /></div><div><p className="text-sm font-semibold">GovIntelligence</p><p className="text-xs text-mist">Decision operating system</p></div></div>; }
+function SectionHead({ eyebrow, title, icon }: { eyebrow: string; title: string; icon: React.ReactNode }) { return <div className="section-head"><div><p className="eyebrow">{eyebrow}</p><h3 className="section-title">{title}</h3></div><div className="text-signal">{icon}</div></div>; }
+function LensCard({ name, value }: { name: string; value: number }) { const tone = value >= 70 ? "bg-signal" : value >= 50 ? "bg-amber" : "bg-danger"; return <div className="lens-card"><div><span>{name}</span><small>{value}%</small></div><div className="progress-track"><div data-progress className={tone} style={{ width: `${value}%` }} /></div></div>; }
+function BriefBlock({ title, icon, items }: { title: string; icon: React.ReactNode; items: readonly string[] }) { return <div className="brief-block"><div className="brief-block-title">{icon}<span>{title}</span></div>{items.map((item) => <p key={item}><span />{item}</p>)}</div>; }
