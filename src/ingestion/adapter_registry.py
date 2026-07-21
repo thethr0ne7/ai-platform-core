@@ -1,6 +1,13 @@
 from dataclasses import dataclass
 from typing import Dict
 
+from .adapters.html_adapter import HtmlAdapter
+from .adapters.sitemap_adapter import SitemapAdapter
+from .adapters.pdf_adapter import PdfAdapter
+from .adapters.api_adapter import ApiAdapter
+from .adapters.archive_adapter import ArchiveAdapter
+from .adapters.fallback_transport import FallbackTransportAdapter
+
 
 @dataclass
 class AdapterDecision:
@@ -10,9 +17,18 @@ class AdapterDecision:
 
 
 class SourceAdapterRegistry:
-    """Routes failed official sources to the correct recovery strategy."""
+    """Routes failed official sources to recovery adapters."""
 
     def __init__(self) -> None:
+        self.adapters = {
+            "html_adapter": HtmlAdapter(),
+            "sitemap_adapter": SitemapAdapter(),
+            "pdf_adapter": PdfAdapter(),
+            "api_adapter": ApiAdapter(),
+            "archive_adapter": ArchiveAdapter(),
+            "fallback_transport_adapter": FallbackTransportAdapter(),
+        }
+
         self.rules: Dict[str, AdapterDecision] = {
             "403": AdapterDecision("sitemap_adapter", "access denied", "3 retries"),
             "429": AdapterDecision("backoff_adapter", "rate limited", "5 retries"),
@@ -27,3 +43,6 @@ class SourceAdapterRegistry:
             error_type.lower(),
             AdapterDecision("html_adapter", "default fallback", "1 retry"),
         )
+
+    def get_adapter(self, name: str):
+        return self.adapters.get(name)
