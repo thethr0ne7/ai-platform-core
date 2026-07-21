@@ -1,40 +1,99 @@
 # AI Platform Core
 
-Единое платформенное ядро для независимых AI-продуктов: PROIDU, Grant AI, Agro AI, Tourism AI, Education AI и Government Intelligence.
+Единое платформенное ядро для AI-продуктов: Government Intelligence, Grant AI, Agro AI, Tourism AI, Education AI и других вертикалей.
 
-## Принцип
+## Architecture Truth v0.50
 
-Каждый продукт остаётся отдельным приложением и репозиторием. `ai-platform-core` предоставляет только переиспользуемые контракты, реестры возможностей, оркестрацию, health checks и архитектурные quality gates.
-
-## Первый vertical slice
-
-`product request → product registry → capability resolution → orchestrator → result`
-
-## Быстрый запуск
-
-```bash
-npm install
-npm run check
-npm run dev
-```
-
-После запуска:
-
-- `GET /health` — статус ядра;
-- `GET /products` — зарегистрированные продукты;
-- `GET /capabilities` — общие возможности платформы.
-
-## Структура
+`ai-platform-core` является production monorepo:
 
 ```text
-src/
-  contracts.ts
-  registry.ts
-  orchestrator.ts
-  server.ts
-platform.manifest.json
+AI Platform Core
+│
+├── apps/
+│   └── web              # пользовательские интерфейсы
+│
+├── packages/
+│   ├── core             # ядро платформы
+│   ├── schemas          # общие контракты данных
+│   ├── runtime          # runtime компоненты
+│   └── observability    # метрики и контроль
+│
+├── ingestion            # источники и адаптеры
+├── evidence              # доказательный слой
+├── learning              # управляемое улучшение системы
+├── Supabase              # data plane
+└── Vercel                # deployment layer
 ```
 
-## Границы
+## Platform Flow
 
-В ядро не помещаются продуктовые экраны, тексты, бизнес-правила поступления, грантов, агротуризма или других вертикалей. Они подключаются снаружи через стабильные контракты.
+```text
+Request
+  ↓
+Planner
+  ↓
+Capability Resolution
+  ↓
+Orchestration
+  ↓
+Ingestion / Evidence
+  ↓
+Result
+  ↓
+Learning Loop
+```
+
+## Quality Gates
+
+Перед попаданием в production проходят:
+
+- strict types
+- workspace build
+- tests
+- security checks
+- migration validation
+- replay validation
+- deployment verification
+
+## Development
+
+```bash
+npm ci
+npm run verify
+npm run build:info
+npm run platform:verify
+```
+
+## Deployment
+
+```text
+GitHub
+  ↓
+GitHub Actions
+  ↓
+Vercel Preview
+  ↓
+Production
+
+Supabase
+  ↓
+Database + Storage + Intelligence Data
+
+Hugging Face compatible runtime
+  ↓
+AI models and evaluation workloads
+```
+
+## Core Principles
+
+- Evidence before conclusions.
+- Modular capabilities instead of duplicated products.
+- Controlled learning instead of uncontrolled self-modification.
+- Versioned contracts between platform layers.
+- Reproducible builds.
+
+## Current Version
+
+```text
+AI Platform Core v0.50.0
+```
