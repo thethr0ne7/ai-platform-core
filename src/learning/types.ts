@@ -63,6 +63,7 @@ export interface LearningPolicy {
   minConfidence: number;
   maxMemoryEntries: number;
   maxSkillVersions: number;
+  maxObservations: number;
 }
 
 export interface LearningStatus {
