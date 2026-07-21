@@ -14,19 +14,9 @@ const DEFAULT_POLICY: LearningPolicy = {
   autoApplySkills: true,
   minConfidence: 0.82,
   maxMemoryEntries: 200,
-  maxSkillVersions: 10
+  maxSkillVersions: 10,
+  maxObservations: 500
 };
-
-function summarize(value: unknown, limit = 500): string | undefined {
-  if (value === undefined) return undefined;
-  try {
-    const serialized = typeof value === "string" ? value : JSON.stringify(value);
-    if (typeof serialized !== "string") return undefined;
-    return serialized.length <= limit ? serialized : `${serialized.slice(0, limit)}…`;
-  } catch {
-    return undefined;
-  }
-}
 
 export class LearningEngine {
   private readonly observations = new Map<string, LearningObservation>();
@@ -67,8 +57,6 @@ export class LearningEngine {
   }): Promise<LearningEvaluation | null> {
     if (!this.policy.enabled) return null;
 
-    const inputSummary = summarize(input.requestPayload);
-    const outputSummary = summarize(input.resultData);
     const observation: LearningObservation = {
       id: randomUUID(),
       requestId: input.requestId,
@@ -77,14 +65,13 @@ export class LearningEngine {
       action: input.action,
       ok: input.ok,
       durationMs: input.durationMs,
-      capabilitiesUsed: input.capabilitiesUsed,
-      ...(inputSummary !== undefined ? { inputSummary } : {}),
-      ...(outputSummary !== undefined ? { outputSummary } : {}),
+      capabilitiesUsed: [...input.capabilitiesUsed],
       ...(input.errorCode !== undefined ? { errorCode: input.errorCode } : {}),
-      ...(input.errorMessage !== undefined ? { errorMessage: input.errorMessage } : {}),
       createdAt: new Date().toISOString()
     };
+
     this.observations.set(observation.id, observation);
+    this.evictOldestObservations();
 
     const evaluation = this.evaluate(observation);
     if (evaluation.confidence < this.policy.minConfidence) return evaluation;
@@ -109,6 +96,14 @@ export class LearningEngine {
     return evaluation;
   }
 
+  private evictOldestObservations(): void {
+    while (this.observations.size > this.policy.maxObservations) {
+      const oldest = [...this.observations.values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0];
+      if (!oldest) return;
+      this.observations.delete(oldest.id);
+    }
+  }
+
   private evaluate(observation: LearningObservation): LearningEvaluation {
     if (!observation.ok) {
       const repeated = this.listObservations().filter(
@@ -125,8 +120,10 @@ export class LearningEngine {
           reason: "Repeated failure pattern can be converted into a recovery procedure.",
           confidence: Math.min(0.98, 0.84 + repeated * 0.04),
           tags: ["recovery", observation.action, observation.errorCode],
-          durableLesson: `${observation.action} repeatedly failed with ${observation.errorCode}: ${observation.errorMessage ?? "no message"}`,
-          skillName: `recover-${observation.action}-${observation.errorCode}`.toLowerCase().replace(/[^a-z0-9-]+/g, "-")
+          durableLesson: `${observation.action} repeatedly failed with ${observation.errorCode}.`,
+          skillName: `recover-${observation.action}-${observation.errorCode}`
+            .toLowerCase()
+            .replace(/[^a-z0-9-]+/g, "-")
         };
       }
 
@@ -136,7 +133,7 @@ export class LearningEngine {
         reason: "Failure is useful operational memory but not yet a stable procedure.",
         confidence: 0.86,
         tags: ["failure", observation.action, observation.errorCode ?? "unknown"],
-        durableLesson: `${observation.action} failed with ${observation.errorCode ?? "UNKNOWN"}: ${observation.errorMessage ?? "no message"}`
+        durableLesson: `${observation.action} failed with ${observation.errorCode ?? "UNKNOWN"}.`
       };
     }
 
@@ -151,7 +148,7 @@ export class LearningEngine {
         reason: "Repeated successful trajectory is stable enough to become a reusable skill.",
         confidence: Math.min(0.97, 0.83 + priorSuccesses * 0.03),
         tags: ["success", "procedure", observation.action],
-        durableLesson: `${observation.action} completed successfully in ${observation.durationMs} ms using ${observation.capabilitiesUsed.join(", ") || "no declared capabilities"}.`,
+        durableLesson: `${observation.action} completed successfully using ${observation.capabilitiesUsed.join(", ") || "no declared capabilities"}.`,
         skillName: `perform-${observation.action}`.toLowerCase().replace(/[^a-z0-9-]+/g, "-")
       };
     }
@@ -162,7 +159,7 @@ export class LearningEngine {
       reason: "Successful execution provides a durable operational example.",
       confidence: 0.83,
       tags: ["success", observation.action],
-      durableLesson: `${observation.action} succeeded in ${observation.durationMs} ms.`
+      durableLesson: `${observation.action} succeeded.`
     };
   }
 
