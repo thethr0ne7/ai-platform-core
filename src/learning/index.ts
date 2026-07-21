@@ -28,5 +28,6 @@ export const learningEngine = new LearningEngine({
 
 export * from "./learning_engine.js";
 export * from "./memory_store.js";
+export * from "./memory_adapter.js";
 export * from "./skill_registry.js";
 export * from "./types.js";
