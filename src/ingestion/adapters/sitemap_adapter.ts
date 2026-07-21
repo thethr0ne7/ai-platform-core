@@ -1,4 +1,4 @@
-import { AdapterResult } from './html_adapter';
+import { AdapterResult } from './html_adapter.js';
 
 export class SitemapAdapter {
   name = 'sitemap';
