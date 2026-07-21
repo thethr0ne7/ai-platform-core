@@ -1,27 +1,42 @@
 {
   "platform": "AI Platform Core",
-  "version": "0.1.0",
+  "version": "0.50.0",
+  "components": {
+    "core": "0.50.0",
+    "web": "0.50.0",
+    "schemas": "0.50.0",
+    "runtime": "0.50.0"
+  },
   "architecture": {
     "layers": [
       "product",
       "capability",
       "orchestration",
+      "ingestion",
+      "evidence",
+      "learning",
       "data",
       "platform"
     ],
-    "verticalSlice": "product request -> registry -> capability resolution -> orchestrator -> result"
+    "verticalSlice": "request -> planner -> capability resolution -> orchestration -> evidence -> result -> learning"
   },
   "qualityGates": [
     "strict-types",
+    "workspace-build",
     "product-isolation",
     "capability-registration",
     "health-check",
-    "no-secrets-in-repository"
+    "no-secrets-in-repository",
+    "replay-validation"
   ],
   "deployment": {
     "source": "GitHub",
     "frontend": "Vercel",
     "data": "Supabase",
-    "surfaces": ["web", "telegram-mini-app"]
+    "aiRuntime": "Hugging Face compatible",
+    "surfaces": [
+      "web",
+      "telegram-mini-app"
+    ]
   }
 }

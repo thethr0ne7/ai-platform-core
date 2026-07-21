@@ -1,4 +1,4 @@
-import { AdapterRegistry } from "./adapter_registry";
+import { AdapterRegistry } from "./adapter_registry.js";
 
 export interface AdapterDecision {
   adapter: string;
