@@ -66,6 +66,8 @@ export class LearningEngine {
   }): Promise<LearningEvaluation | null> {
     if (!this.policy.enabled) return null;
 
+    const inputSummary = summarize(input.requestPayload);
+    const outputSummary = summarize(input.resultData);
     const observation: LearningObservation = {
       id: randomUUID(),
       requestId: input.requestId,
@@ -75,10 +77,10 @@ export class LearningEngine {
       ok: input.ok,
       durationMs: input.durationMs,
       capabilitiesUsed: input.capabilitiesUsed,
-      inputSummary: summarize(input.requestPayload),
-      outputSummary: summarize(input.resultData),
-      errorCode: input.errorCode,
-      errorMessage: input.errorMessage,
+      ...(inputSummary !== undefined ? { inputSummary } : {}),
+      ...(outputSummary !== undefined ? { outputSummary } : {}),
+      ...(input.errorCode !== undefined ? { errorCode: input.errorCode } : {}),
+      ...(input.errorMessage !== undefined ? { errorMessage: input.errorMessage } : {}),
       createdAt: new Date().toISOString()
     };
     this.observations.set(observation.id, observation);
