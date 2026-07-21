@@ -19,7 +19,7 @@ function parseConfidence(value: string | undefined, fallback: number): number {
 export const learningEngine = new LearningEngine({
   enabled: process.env.LEARNING_ENABLED !== "false",
   autoApplyMemory: process.env.LEARNING_AUTO_MEMORY !== "false",
-  autoApplySkills: process.env.LEARNING_AUTO_SKILLS !== "false",
+  autoApplySkills: process.env.LEARNING_AUTO_SKILLS === "true",
   minConfidence: parseConfidence(process.env.LEARNING_MIN_CONFIDENCE, 0.82),
   maxMemoryEntries: parsePositiveInteger(process.env.LEARNING_MAX_MEMORY_ENTRIES, 200),
   maxSkillVersions: parsePositiveInteger(process.env.LEARNING_MAX_SKILL_VERSIONS, 10),
