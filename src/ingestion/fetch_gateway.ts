@@ -44,7 +44,7 @@ export class DefaultFetchGateway implements SafeFetchGateway {
     return {
       url,
       status: response.status,
-      contentType,
+      contentType: contentType ?? "application/octet-stream",
       body,
     };
   }
