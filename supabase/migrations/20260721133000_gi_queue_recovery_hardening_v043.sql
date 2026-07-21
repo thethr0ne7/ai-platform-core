@@ -8,12 +8,22 @@ alter table public.gi_crawl_jobs
   add column if not exists error_class text,
   add column if not exists last_heartbeat_at timestamptz;
 
--- Replace the original status check with one that includes the retry state
--- already used by the worker and dispatcher.
+-- Drop only CHECK constraints that actually reference the status column.
 do $$
 declare
   r record;
+  v_status_attnum smallint;
 begin
+  select a.attnum
+  into v_status_attnum
+  from pg_attribute a
+  join pg_class t on t.oid = a.attrelid
+  join pg_namespace n on n.oid = t.relnamespace
+  where n.nspname = 'public'
+    and t.relname = 'gi_crawl_jobs'
+    and a.attname = 'status'
+    and not a.attisdropped;
+
   for r in
     select c.conname
     from pg_constraint c
@@ -22,7 +32,7 @@ begin
     where n.nspname = 'public'
       and t.relname = 'gi_crawl_jobs'
       and c.contype = 'c'
-      and pg_get_constraintdef(c.oid) ilike '%status%'
+      and v_status_attnum = any(c.conkey)
   loop
     execute format('alter table public.gi_crawl_jobs drop constraint %I', r.conname);
   end loop;
@@ -31,7 +41,11 @@ $$;
 
 alter table public.gi_crawl_jobs
   add constraint gi_crawl_jobs_status_check
-  check (status in ('pending','running','retry','succeeded','failed','dead_letter','blocked'));
+  check (status in ('pending','running','retry','succeeded','failed','dead_letter','blocked'))
+  not valid;
+
+alter table public.gi_crawl_jobs
+  drop constraint if exists gi_crawl_jobs_error_class_check;
 
 alter table public.gi_crawl_jobs
   add constraint gi_crawl_jobs_error_class_check
@@ -42,38 +56,52 @@ alter table public.gi_crawl_jobs
       'content_empty','content_unsupported','persistence_error',
       'stale_worker_lock','unknown'
     )
+  ) not valid;
+
+create or replace function public.gi_is_valid_crawl_error_class(p_error_class text)
+returns boolean
+language sql
+immutable
+set search_path = public
+as $$
+  select p_error_class is null or p_error_class in (
+    'dns_error','tls_error','timeout','http_403','http_404','http_429',
+    'http_5xx','redirect_blocked','robots_blocked','parse_error',
+    'content_empty','content_unsupported','persistence_error',
+    'stale_worker_lock','unknown'
   );
+$$;
 
-create index if not exists gi_crawl_jobs_retry_due_v043_idx
-  on public.gi_crawl_jobs (status, retry_after, priority, scheduled_at)
-  where status = 'retry';
+revoke all on function public.gi_is_valid_crawl_error_class(text) from public, anon, authenticated;
+grant execute on function public.gi_is_valid_crawl_error_class(text) to service_role, postgres;
 
-create index if not exists gi_crawl_jobs_running_lease_v043_idx
-  on public.gi_crawl_jobs (status, locked_at, last_heartbeat_at)
-  where status = 'running';
-
+-- Bounded backoff with 20% jitter to prevent synchronized retry storms.
 create or replace function public.gi_retry_delay_minutes(
   p_attempts integer,
   p_error_class text default null
 )
 returns integer
-language sql
-immutable
+language plpgsql
+volatile
 set search_path = public
 as $$
-  select least(
-    1440,
-    greatest(
-      1,
-      case
-        when p_error_class = 'http_429' then 30
-        when p_error_class = 'http_403' then 180
-        when p_error_class = 'http_404' then 720
-        when p_error_class in ('tls_error','dns_error') then 60
-        else power(2, least(greatest(coalesce(p_attempts, 1), 1), 10))::integer
-      end
-    )
-  );
+declare
+  v_base integer;
+  v_jittered integer;
+begin
+  v_base := case
+    when p_error_class = 'http_429' then 30
+    when p_error_class = 'http_403' then 180
+    when p_error_class = 'http_404' then 720
+    when p_error_class in ('tls_error','dns_error') then 60
+    else power(2, least(greatest(coalesce(p_attempts, 1), 1), 10))::integer
+  end;
+
+  v_base := least(1440, greatest(1, v_base));
+  v_jittered := ceil(v_base * (0.8 + random() * 0.4))::integer;
+
+  return least(1440, greatest(1, v_jittered));
+end;
 $$;
 
 revoke all on function public.gi_retry_delay_minutes(integer, text) from public, anon, authenticated;
@@ -117,7 +145,6 @@ begin
     )
       and j.scheduled_at <= now()
       and j.attempts < j.max_attempts
-      and (j.locked_at is null or j.locked_at < now() - interval '20 minutes')
     order by j.priority asc, coalesce(j.retry_after, j.scheduled_at) asc, j.created_at asc
     for update skip locked
     limit greatest(1, least(coalesce(p_limit, 5), 20))
@@ -212,6 +239,16 @@ declare
   v_updated integer;
   v_retry_minutes integer;
 begin
+  if p_status not in ('succeeded','failed','retry','dead_letter') then
+    raise exception 'invalid crawl job terminal status: %', p_status
+      using errcode = '22023';
+  end if;
+
+  if not public.gi_is_valid_crawl_error_class(p_error_class) then
+    raise exception 'invalid crawl job error class: %', p_error_class
+      using errcode = '22023';
+  end if;
+
   select attempts, max_attempts
   into v_attempts, v_max_attempts
   from public.gi_crawl_jobs
@@ -224,10 +261,7 @@ begin
     return false;
   end if;
 
-  v_status := case
-    when p_status in ('succeeded','failed','retry','dead_letter') then p_status
-    else 'failed'
-  end;
+  v_status := p_status;
 
   if v_status = 'retry' and v_attempts >= v_max_attempts then
     v_status := 'dead_letter';
@@ -242,12 +276,7 @@ begin
       result = coalesce(p_result, '{}'::jsonb),
       last_error = left(p_error, 4000),
       error_class = case
-        when p_error_class in (
-          'dns_error','tls_error','timeout','http_403','http_404','http_429',
-          'http_5xx','redirect_blocked','robots_blocked','parse_error',
-          'content_empty','content_unsupported','persistence_error',
-          'stale_worker_lock','unknown'
-        ) then p_error_class
+        when p_error_class is not null then p_error_class
         when p_error is not null then 'unknown'
         else null
       end,
@@ -280,26 +309,40 @@ as $$
 declare
   v_count integer;
 begin
-  update public.gi_crawl_jobs
-  set status = case when attempts >= max_attempts then 'dead_letter' else 'retry' end,
+  with stale as (
+    select
+      j.id,
+      j.attempts,
+      j.max_attempts,
+      case
+        when j.attempts >= j.max_attempts then null
+        else public.gi_retry_delay_minutes(j.attempts, 'stale_worker_lock')
+      end as retry_minutes
+    from public.gi_crawl_jobs j
+    where j.status = 'running'
+      and coalesce(j.last_heartbeat_at, j.locked_at) < now() - interval '30 minutes'
+    for update skip locked
+  )
+  update public.gi_crawl_jobs j
+  set status = case when stale.attempts >= stale.max_attempts then 'dead_letter' else 'retry' end,
       error_class = 'stale_worker_lock',
-      last_error = coalesce(last_error, 'stale_worker_lock'),
+      last_error = coalesce(j.last_error, 'stale_worker_lock'),
       retry_after = case
-        when attempts >= max_attempts then null
-        else now() + make_interval(mins => public.gi_retry_delay_minutes(attempts, 'stale_worker_lock'))
+        when stale.retry_minutes is null then null
+        else now() + make_interval(mins => stale.retry_minutes)
       end,
       scheduled_at = case
-        when attempts >= max_attempts then scheduled_at
-        else now() + make_interval(mins => public.gi_retry_delay_minutes(attempts, 'stale_worker_lock'))
+        when stale.retry_minutes is null then j.scheduled_at
+        else now() + make_interval(mins => stale.retry_minutes)
       end,
-      finished_at = case when attempts >= max_attempts then now() else null end,
+      finished_at = case when stale.attempts >= stale.max_attempts then now() else null end,
       claim_token = null,
       locked_at = null,
       locked_by = null,
       last_heartbeat_at = null,
       updated_at = now()
-  where status = 'running'
-    and coalesce(last_heartbeat_at, locked_at) < now() - interval '30 minutes';
+  from stale
+  where j.id = stale.id;
 
   get diagnostics v_count = row_count;
   return v_count;
@@ -309,11 +352,17 @@ $$;
 revoke all on function public.gi_recover_stale_crawl_jobs() from public, anon, authenticated;
 grant execute on function public.gi_recover_stale_crawl_jobs() to service_role, postgres;
 
--- Make existing retry rows immediately claimable unless they already carry
--- an explicit retry timestamp.
-update public.gi_crawl_jobs
-set retry_after = coalesce(retry_after, scheduled_at),
-    updated_at = now()
-where status = 'retry';
+-- Schedule recovery when pg_cron is available. Reusing the same job name updates it.
+do $$
+begin
+  if exists (select 1 from pg_extension where extname = 'pg_cron') then
+    perform cron.schedule(
+      'gi-recover-stale-crawl-jobs',
+      '*/5 * * * *',
+      'select public.gi_recover_stale_crawl_jobs();'
+    );
+  end if;
+end;
+$$;
 
 commit;
