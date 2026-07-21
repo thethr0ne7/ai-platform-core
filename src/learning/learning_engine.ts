@@ -20,8 +20,9 @@ const DEFAULT_POLICY: LearningPolicy = {
 function summarize(value: unknown, limit = 500): string | undefined {
   if (value === undefined) return undefined;
   try {
-    const text = typeof value === "string" ? value : JSON.stringify(value);
-    return text.length <= limit ? text : `${text.slice(0, limit)}…`;
+    const serialized = typeof value === "string" ? value : JSON.stringify(value);
+    if (typeof serialized !== "string") return undefined;
+    return serialized.length <= limit ? serialized : `${serialized.slice(0, limit)}…`;
   } catch {
     return undefined;
   }
