@@ -46,10 +46,7 @@ async function learnFromResult<TPayload, TData>(
     ok: result.ok,
     durationMs: result.durationMs,
     capabilitiesUsed: [...result.capabilitiesUsed],
-    requestPayload: request.payload,
-    ...(result.ok
-      ? { resultData: result.data }
-      : { errorCode: result.error.code, errorMessage: result.error.message })
+    ...(result.ok ? {} : { errorCode: result.error.code })
   });
 }
 
@@ -74,7 +71,11 @@ export async function orchestrate<TPayload, TData = unknown>(
   };
 
   const finish = async (result: PlatformResult<TData>): Promise<PlatformResult<TData>> => {
-    await learnFromResult(request, result);
+    try {
+      await learnFromResult(request, result);
+    } catch (error) {
+      console.error("learning observation failed", error);
+    }
     return result;
   };
 
