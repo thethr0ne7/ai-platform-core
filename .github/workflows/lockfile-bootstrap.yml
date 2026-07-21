@@ -11,8 +11,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout current branch
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -31,4 +34,4 @@ jobs:
 
           git commit -m "chore: add root npm lockfile for deterministic ci" || echo "No changes"
 
-          git push
+          git push origin HEAD:${{ github.ref_name }}
