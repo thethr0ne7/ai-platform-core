@@ -9,6 +9,7 @@ import type {
   ProductId
 } from "./contracts.js";
 import { emptyEventBus, type EventBus, type PlatformEventType } from "./events.js";
+import { learningEngine } from "./learning/index.js";
 import type { ProviderResolver } from "./providers.js";
 import { getProduct } from "./registry.js";
 
@@ -33,6 +34,25 @@ function failure(input: {
   };
 }
 
+async function learnFromResult<TPayload, TData>(
+  request: PlatformRequest<TPayload>,
+  result: PlatformResult<TData>
+): Promise<void> {
+  await learningEngine.observe({
+    requestId: result.requestId,
+    traceId: result.traceId,
+    productId: result.productId ?? request.productId,
+    action: result.action ?? request.action,
+    ok: result.ok,
+    durationMs: result.durationMs,
+    capabilitiesUsed: [...result.capabilitiesUsed],
+    requestPayload: request.payload,
+    ...(result.ok
+      ? { resultData: result.data }
+      : { errorCode: result.error.code, errorMessage: result.error.message })
+  });
+}
+
 export async function orchestrate<TPayload, TData = unknown>(
   request: PlatformRequest<TPayload>,
   providers: ProviderResolver = emptyProviderResolver,
@@ -53,6 +73,11 @@ export async function orchestrate<TPayload, TData = unknown>(
     });
   };
 
+  const finish = async (result: PlatformResult<TData>): Promise<PlatformResult<TData>> => {
+    await learnFromResult(request, result);
+    return result;
+  };
+
   await emit("request.received", {});
   await emit("request.validated", {});
 
@@ -68,7 +93,7 @@ export async function orchestrate<TPayload, TData = unknown>(
       action: request.action
     });
     await emit("action.failed", result.error, request.productId);
-    return result;
+    return finish(result);
   }
 
   await emit("product.resolved", { status: product.status }, product.id);
@@ -84,7 +109,7 @@ export async function orchestrate<TPayload, TData = unknown>(
       action: request.action
     });
     await emit("action.failed", result.error, product.id);
-    return result;
+    return finish(result);
   }
 
   const handler = getAction(request.action);
@@ -99,7 +124,7 @@ export async function orchestrate<TPayload, TData = unknown>(
       action: request.action
     });
     await emit("action.failed", result.error, product.id);
-    return result;
+    return finish(result);
   }
 
   await emit("action.resolved", { requiredCapabilities: handler.requiredCapabilities }, product.id);
@@ -120,7 +145,7 @@ export async function orchestrate<TPayload, TData = unknown>(
       action: request.action
     });
     await emit("action.failed", result.error, product.id);
-    return result;
+    return finish(result);
   }
 
   await emit("action.started", {}, product.id);
@@ -146,7 +171,7 @@ export async function orchestrate<TPayload, TData = unknown>(
       data
     };
     await emit("action.completed", { durationMs: result.durationMs }, product.id);
-    return result;
+    return finish(result);
   } catch (error) {
     const result = failure({
       code: "HANDLER_FAILED",
@@ -158,6 +183,6 @@ export async function orchestrate<TPayload, TData = unknown>(
       action: request.action
     });
     await emit("action.failed", result.error, product.id);
-    return result;
+    return finish(result);
   }
 }
