@@ -1,7 +1,8 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { listActions } from "./actions.js";
+import { learningEngine } from "./learning/index.js";
 import { orchestrate } from "./orchestrator.js";
 import { capabilities, products } from "./registry.js";
-import { listActions } from "./actions.js";
 
 const port = Number(process.env.PORT ?? 3000);
 const maxBodyBytes = 1_000_000;
@@ -52,7 +53,7 @@ const server = createServer(async (request, response) => {
   const url = new URL(request.url ?? "/", "http://localhost");
 
   if (request.method === "GET" && url.pathname === "/health/live") {
-    send(response, 200, { status: "ok", service: "ai-platform-core", version: "0.2.0" });
+    send(response, 200, { status: "ok", service: "ai-platform-core", version: "0.3.0" });
     return;
   }
 
@@ -60,7 +61,8 @@ const server = createServer(async (request, response) => {
     send(response, 200, {
       status: products.length > 0 && listActions().length > 0 ? "ready" : "not-ready",
       products: products.length,
-      actions: listActions().length
+      actions: listActions().length,
+      learning: learningEngine.status()
     });
     return;
   }
@@ -77,6 +79,29 @@ const server = createServer(async (request, response) => {
 
   if (request.method === "GET" && url.pathname === "/v1/actions") {
     send(response, 200, { actions: listActions() });
+    return;
+  }
+
+  if (request.method === "GET" && url.pathname === "/v1/learning/status") {
+    send(response, 200, learningEngine.status());
+    return;
+  }
+
+  if (request.method === "GET" && url.pathname === "/v1/learning/memory") {
+    send(response, 200, { entries: learningEngine.memory.list() });
+    return;
+  }
+
+  if (request.method === "GET" && url.pathname === "/v1/learning/skills") {
+    send(response, 200, {
+      skills: learningEngine.skills.list(),
+      pending: learningEngine.skills.listPending()
+    });
+    return;
+  }
+
+  if (request.method === "GET" && url.pathname === "/v1/learning/observations") {
+    send(response, 200, { observations: learningEngine.listObservations() });
     return;
   }
 
