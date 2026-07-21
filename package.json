@@ -1,8 +1,12 @@
 {
   "name": "@thr0ne7/ai-platform-core",
-  "version": "0.2.0",
+  "version": "0.50.0",
   "private": true,
   "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "engines": {
     "node": ">=20"
   },
@@ -11,10 +15,10 @@
     "check": "tsc --noEmit",
     "test": "tsx --test test/*.test.ts",
     "verify": "npm run check && npm test",
-    "ingest:official": "tsx src/run-official-source-ingestion.ts",
-    "start": "node --enable-source-maps dist/server.js",
-    "worker:proidu-mai": "node --enable-source-maps dist/proidu-mai-worker.js",
-    "build": "tsc"
+    "build": "tsc",
+    "build:info": "tsx scripts/generate-build-info.ts",
+    "web:build": "npm --workspace @thr0ne7/web run build",
+    "platform:verify": "npm run verify && npm run web:build"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
