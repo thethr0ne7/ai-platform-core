@@ -3,6 +3,10 @@ name: Lockfile Bootstrap
 on:
   workflow_dispatch:
 
+  push:
+    branches:
+      - audit/github-architecture-v050
+
 permissions:
   contents: write
 
