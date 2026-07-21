@@ -1,27 +1,34 @@
 name: Lockfile Bootstrap
 
 on:
-  push:
-    branches:
-      - audit/github-architecture-v050
+  workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   lockfile:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 20
+
       - name: Generate lockfile
         run: npm install --package-lock-only --ignore-scripts
-      - name: Upload lockfile
-        uses: actions/upload-artifact@v4
-        with:
-          name: package-lock
-          path: package-lock.json
-          if-no-files-found: error
+
+      - name: Commit lockfile
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add package-lock.json
+
+          git commit -m "chore: add root npm lockfile for deterministic ci" || echo "No changes"
+
+          git push
