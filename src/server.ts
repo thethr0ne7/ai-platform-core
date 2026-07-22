@@ -57,7 +57,10 @@ function isExecutionRequest(value: unknown): value is {
 
 function requestKey(request: IncomingMessage): string {
   const forwarded = request.headers["x-forwarded-for"];
-  if (typeof forwarded === "string" && forwarded.trim()) return forwarded.split(",")[0].trim();
+  if (typeof forwarded === "string" && forwarded.trim()) {
+    const firstAddress = forwarded.split(",")[0];
+    if (firstAddress) return firstAddress.trim();
+  }
   return request.socket.remoteAddress ?? "unknown";
 }
 
