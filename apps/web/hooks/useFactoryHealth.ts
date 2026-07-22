@@ -8,6 +8,7 @@ type HealthRun = Record<string, unknown>
 type FactoryHealthData = {
   factory: HealthRun[]
   ingestion: HealthRun[]
+  snapshot?: Record<string, unknown>
 }
 
 type FactoryHealthState = {
@@ -27,24 +28,24 @@ export function useFactoryHealth(): FactoryHealthState {
     let active = true
 
     async function load() {
-      const [factory, ingestion] = await Promise.all([
-        supabase.from('factory_runs').select('*').order('started_at', { ascending: false }).limit(5),
-        supabase.from('gi_ingestion_runs').select('*').order('started_at', { ascending: false }).limit(5),
-      ])
+      const { data, error } = await supabase.rpc('get_factory_health')
 
       if (!active) return
 
-      const error = factory.error ?? ingestion.error
+      if (error) {
+        setState({ data: null, loading: false, error: 'Не удалось получить состояние системы.' })
+        return
+      }
 
+      const value = (data ?? {}) as Partial<FactoryHealthData>
       setState({
-        data: error
-          ? null
-          : {
-              factory: (factory.data ?? []) as HealthRun[],
-              ingestion: (ingestion.data ?? []) as HealthRun[],
-            },
+        data: {
+          factory: Array.isArray(value.factory) ? value.factory : [],
+          ingestion: Array.isArray(value.ingestion) ? value.ingestion : [],
+          snapshot: value.snapshot ?? {},
+        },
         loading: false,
-        error: error?.message ?? null,
+        error: null,
       })
     }
 
