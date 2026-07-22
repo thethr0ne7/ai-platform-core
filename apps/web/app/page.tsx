@@ -1,5 +1,5 @@
-import { IntelligenceWorkspace } from "@/components/intelligence-workspace";
+import { redirect } from 'next/navigation'
 
 export default function HomePage() {
-  return <IntelligenceWorkspace />;
+  redirect('/control-center')
 }
