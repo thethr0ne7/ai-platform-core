@@ -1,14 +1,15 @@
 {
   "platform": "AI Platform Core",
-  "version": "0.74.1",
-  "codename": "Human Verification Gate",
+  "version": "0.75.0",
+  "codename": "Official Measure Directions",
   "components": {
     "core": "0.72.0",
-    "web": "0.74.1",
-    "schemas": "0.74.1",
+    "web": "0.75.0",
+    "schemas": "0.75.0",
     "runtime": "0.72.0",
     "governmentIntelligence": "0.72.0",
-    "evidenceReview": "0.74.1"
+    "evidenceReview": "0.74.1",
+    "measureDirections": "0.75.0"
   },
   "architecture": {
     "layers": [
@@ -20,7 +21,7 @@
       "learning",
       "platform"
     ],
-    "verticalSlice": "project profile + documents -> parsing -> facts -> machine evidence match -> human expert review -> eligibility -> truth gate -> decision cards -> application route -> controlled forecast",
+    "verticalSlice": "project profile + documents -> parsing -> facts -> machine evidence match -> human expert review -> eligibility -> truth gate -> official expense directions -> decision cards -> application route -> controlled forecast",
     "epistemicContract": [
       "signal-is-not-fact",
       "trend-is-not-requirement",
@@ -28,8 +29,18 @@
       "narrative-is-not-legal-basis",
       "quote-must-exist-in-saved-source-version",
       "machine-match-is-not-human-verification",
-      "verified-requirement-requires-human-reviewed-tier-a-evidence"
+      "verified-requirement-requires-human-reviewed-tier-a-evidence",
+      "direction-match-is-not-eligibility",
+      "machine-direction-is-not-human-verified",
+      "one-legal-mechanism-is-not-many-programmes"
     ]
+  },
+  "catalogue": {
+    "supportMeasures": 2,
+    "structuredDirections": 16,
+    "humanVerifiedDirections": 0,
+    "directionLegalEffect": "relevance_hint_only",
+    "sourceDocument": "Приказ Минсельхоза России от 25.03.2025 № 187"
   },
   "productExperience": {
     "primaryJourney": [
@@ -46,6 +57,13 @@
       "explicit-human-decision",
       "atomic-audit-record",
       "truth-gate"
+    ],
+    "directionJourney": [
+      "completed-core-analysis",
+      "post-truth-enrichment",
+      "project-term-matching",
+      "official-expense-direction",
+      "explicit-non-eligibility-warning"
     ],
     "mobileFirst": true,
     "language": "ru",
@@ -67,6 +85,8 @@
     "explicit-human-review",
     "evidence-review-audit",
     "verified-requirement-link",
+    "direction-relevance-isolation",
+    "no-direction-score-escalation",
     "truth-gated-decision-cards",
     "controlled-forecasting",
     "mobile-overflow",
@@ -81,7 +101,8 @@
     "surfaces": [
       "web",
       "telegram-mini-app",
-      "evidence-review-workspace"
+      "evidence-review-workspace",
+      "measure-direction-enrichment"
     ]
   },
   "legacy": {
