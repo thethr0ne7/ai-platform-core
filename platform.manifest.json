@@ -1,14 +1,14 @@
 {
   "platform": "AI Platform Core",
-  "version": "0.74.0",
-  "codename": "Verified Catalogue Foundation",
+  "version": "0.74.1",
+  "codename": "Human Verification Gate",
   "components": {
     "core": "0.72.0",
-    "web": "0.74.0",
-    "schemas": "0.74.0",
+    "web": "0.74.1",
+    "schemas": "0.74.1",
     "runtime": "0.72.0",
     "governmentIntelligence": "0.72.0",
-    "evidenceReview": "0.74.0"
+    "evidenceReview": "0.74.1"
   },
   "architecture": {
     "layers": [
@@ -20,14 +20,15 @@
       "learning",
       "platform"
     ],
-    "verticalSlice": "project profile + documents -> parsing -> facts -> evidence -> expert review -> eligibility -> truth gate -> decision cards -> application route -> controlled forecast",
+    "verticalSlice": "project profile + documents -> parsing -> facts -> machine evidence match -> human expert review -> eligibility -> truth gate -> decision cards -> application route -> controlled forecast",
     "epistemicContract": [
       "signal-is-not-fact",
       "trend-is-not-requirement",
       "forecast-is-not-eligibility",
       "narrative-is-not-legal-basis",
       "quote-must-exist-in-saved-source-version",
-      "verified-requirement-requires-tier-a-evidence"
+      "machine-match-is-not-human-verification",
+      "verified-requirement-requires-human-reviewed-tier-a-evidence"
     ]
   },
   "productExperience": {
@@ -39,8 +40,10 @@
     "expertJourney": [
       "telegram-authenticated-reviewer",
       "evidence-queue",
+      "machine-quote-candidate",
       "saved-source-version",
       "exact-quote-and-locator",
+      "explicit-human-decision",
       "atomic-audit-record",
       "truth-gate"
     ],
@@ -60,6 +63,8 @@
     "evidence-provenance",
     "tier-a-source-owner",
     "exact-quote-match",
+    "machine-human-provenance-separation",
+    "explicit-human-review",
     "evidence-review-audit",
     "verified-requirement-link",
     "truth-gated-decision-cards",

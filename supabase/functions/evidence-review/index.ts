@@ -101,13 +101,26 @@ async function getReviewer(userId: number) {
 }
 
 async function getSummary() {
-  const [tasks, evidence, requirements] = await Promise.all([
+  const [tasks, humanEvidence, machineMatches, requirements] = await Promise.all([
     db.from("gi_evidence_verification_queue").select("status"),
-    db.from("gi_evidence_records").select("id", { count: "exact", head: true }).or("verification_status.eq.verified,status.eq.verified"),
-    db.from("gi_measure_requirements").select("id", { count: "exact", head: true }).eq("active", true).eq("evidence_status", "verified"),
+    db
+      .from("gi_evidence_records")
+      .select("id", { count: "exact", head: true })
+      .eq("verification_status", "verified")
+      .contains("metadata", { human_reviewed: true }),
+    db
+      .from("gi_evidence_records")
+      .select("id", { count: "exact", head: true })
+      .contains("metadata", { machine_quote_match: true }),
+    db
+      .from("gi_measure_requirements")
+      .select("id", { count: "exact", head: true })
+      .eq("active", true)
+      .eq("evidence_status", "verified"),
   ]);
   if (tasks.error) throw tasks.error;
-  if (evidence.error) throw evidence.error;
+  if (humanEvidence.error) throw humanEvidence.error;
+  if (machineMatches.error) throw machineMatches.error;
   if (requirements.error) throw requirements.error;
 
   const summary = emptySummary();
@@ -118,7 +131,8 @@ async function getSummary() {
     else if (status === "rejected") summary.rejectedTasks += 1;
     else summary.openTasks += 1;
   }
-  summary.verifiedEvidence = evidence.count ?? 0;
+  summary.machineMatches = machineMatches.count ?? 0;
+  summary.verifiedEvidence = humanEvidence.count ?? 0;
   summary.verifiedRequirements = requirements.count ?? 0;
   return summary;
 }
@@ -129,6 +143,7 @@ function emptySummary() {
     verifiedTasks: 0,
     blockedTasks: 0,
     rejectedTasks: 0,
+    machineMatches: 0,
     verifiedEvidence: 0,
     verifiedRequirements: 0,
   };
@@ -157,6 +172,8 @@ function normalizeError(message: string) {
     "verification_requires_exact_quote",
     "verification_requires_locator",
     "quote_not_found_in_source_version",
+    "verified_evidence_requires_human_review",
+    "verified_requirement_requires_human_reviewed_evidence",
   ];
   return known.find((item) => message.includes(item)) ?? message;
 }
