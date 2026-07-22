@@ -6,6 +6,7 @@ export type EvidenceReviewSummary = {
   verifiedTasks: number;
   blockedTasks: number;
   rejectedTasks: number;
+  machineMatches: number;
   verifiedEvidence: number;
   verifiedRequirements: number;
 };
