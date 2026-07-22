@@ -3,7 +3,6 @@
 import type { ReactNode } from "react";
 import {
   Activity,
-  AlertCircle,
   ArrowUpRight,
   BookOpenCheck,
   CheckCircle2,
@@ -311,7 +310,7 @@ function RequirementRow({ requirement, index }: { requirement: Record<string, un
 function IngestionStatus({ ingestion }: { ingestion: NonNullable<GovernmentOpportunityReportData["ingestion_health"]> }) {
   const latest = ingestion.latest_run ?? {};
   const failures = ingestion.recent_failures ?? [];
-  const uniqueFailures = Array.from(new Map(failures.map((failure) => [text(failure.source_key, String(Math.random())), failure])).values()).slice(0, 6);
+  const uniqueFailures = Array.from(new Map(failures.map((failure, index) => [text(failure.source_key, `source-${index}`), failure])).values()).slice(0, 6);
   return <div>
     <div className="grid grid-cols-2 gap-3"><SmallMetric title="Точки сбора" value={numberValue(ingestion.active_endpoints)} accent /><SmallMetric title="В очереди" value={numberValue(ingestion.queued_sources)} /><SmallMetric title="Обработано" value={numberValue(latest.sources_processed)} /><SmallMetric title="Ошибок" value={numberValue(latest.failed_count)} /></div>
     <div className="mt-4 clay-inset rounded-[20px] p-4"><div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"><p className="font-medium">Последнее обновление</p><StatusBadge status={latest.status} /></div><p className="mt-2 text-xs leading-5 text-mist/45">{dateLabel(latest.finished_at ?? latest.started_at)} · найдено {numberValue(latest.discovered_count)} · сохранено {numberValue(latest.persisted_count)}</p></div>
