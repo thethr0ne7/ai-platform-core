@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ShieldCheck } from "lucide-react";
+import { Database, ShieldCheck } from "lucide-react";
 import { getEvidenceReviewerStatus } from "../lib/evidence-review";
 
 export function EvidenceReviewShortcut() {
@@ -28,11 +28,19 @@ export function EvidenceReviewShortcut() {
   if (!visible) return null;
 
   return (
-    <a
-      href="/evidence-review"
-      className="fixed bottom-4 right-3 z-[60] inline-flex min-h-11 items-center gap-2 rounded-[18px] border border-signal/30 bg-signal px-4 py-3 text-xs font-semibold text-ink shadow-2xl sm:right-5"
-    >
-      <ShieldCheck size={16} /> Проверка доказательств
-    </a>
+    <div className="fixed bottom-4 right-3 z-[60] flex max-w-[calc(100vw-1.5rem)] flex-col items-end gap-2 sm:right-5">
+      <a
+        href="/catalogue-control"
+        className="inline-flex min-h-11 items-center gap-2 rounded-[18px] border border-white/10 bg-ink/95 px-4 py-3 text-xs font-semibold text-mist shadow-2xl backdrop-blur"
+      >
+        <Database size={16} /> Контроль каталога
+      </a>
+      <a
+        href="/evidence-review"
+        className="inline-flex min-h-11 items-center gap-2 rounded-[18px] border border-signal/30 bg-signal px-4 py-3 text-xs font-semibold text-ink shadow-2xl"
+      >
+        <ShieldCheck size={16} /> Проверка доказательств
+      </a>
+    </div>
   );
 }
