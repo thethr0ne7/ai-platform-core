@@ -10,7 +10,7 @@ const cors = {
 function jsonResponse(payload: unknown, status = 200) {
   return new Response(JSON.stringify(payload), {
     status,
-    headers: { ...cors, "Content-Type": "application/json" },
+    headers: { ...cors, "Content-Type": "application/json", "Cache-Control": "no-store" },
   });
 }
 
@@ -55,7 +55,20 @@ Deno.serve(async (req) => {
     });
     if (enrichedReport.error) throw enrichedReport.error;
 
-    return jsonResponse({ report: enrichedReport.data });
+    const sourceCatalog = await db.rpc("gi_get_source_catalog_for_report");
+    if (sourceCatalog.error) throw sourceCatalog.error;
+
+    const report = {
+      ...(enrichedReport.data as Record<string, unknown>),
+      sources: sourceCatalog.data ?? [],
+      metadata: {
+        ...(((enrichedReport.data as Record<string, unknown>)?.metadata as Record<string, unknown>) ?? {}),
+        source_health_engine: "official-source-ingestion-v0.59",
+        source_catalog_generated_at: new Date().toISOString(),
+      },
+    };
+
+    return jsonResponse({ report });
   } catch (error) {
     return jsonResponse(
       { error: error instanceof Error ? error.message : "Ошибка анализа" },
