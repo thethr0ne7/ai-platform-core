@@ -13,9 +13,9 @@ import {
 } from 'lucide-react'
 
 const navigation = [
-  { href: '/control-center', label: 'Главная', icon: LayoutDashboard },
-  { href: '/control-center/government', label: 'Поддержка и программы', icon: Landmark },
-  { href: '/control-center/health', label: 'Состояние системы', icon: Activity },
+  { href: '/control-center', label: 'Главная', mobileLabel: 'Главная', icon: LayoutDashboard },
+  { href: '/control-center/government', label: 'Поддержка и программы', mobileLabel: 'Программы', icon: Landmark },
+  { href: '/control-center/health', label: 'Состояние системы', mobileLabel: 'Система', icon: Activity },
 ]
 
 export default function Sidebar() {
@@ -33,7 +33,7 @@ export default function Sidebar() {
             <p className="mt-1 text-[11px] text-mist/45">Центр управления</p>
           </div>
           <span className="ml-auto rounded-full border border-signal/25 bg-signal/[.1] px-2.5 py-1 text-[10px] font-semibold text-signal">
-            0.55
+            0.56
           </span>
         </div>
 
@@ -95,12 +95,12 @@ export default function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex min-w-0 flex-1 flex-col items-center gap-1 rounded-[18px] py-2 text-[10px] transition ${
+              className={`flex min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-[18px] px-1 py-2 text-[10px] transition ${
                 active ? 'dock-active text-mist' : 'text-mist/45'
               }`}
             >
               <Icon size={18} strokeWidth={1.8} className={active ? 'text-signal' : ''} />
-              <span className="truncate">{item.label}</span>
+              <span className="block w-full truncate text-center leading-4">{item.mobileLabel}</span>
             </Link>
           )
         })}
