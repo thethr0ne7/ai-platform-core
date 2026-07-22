@@ -1,12 +1,12 @@
 {
   "platform": "AI Platform Core",
-  "version": "0.73.0",
-  "codename": "Product Workspace UI",
+  "version": "0.72.0",
+  "codename": "VER436SIA Intelligence Merge",
   "components": {
-    "core": "0.72.0",
-    "web": "0.73.0",
+    "core": "0.50.0",
+    "web": "0.50.0",
     "schemas": "0.72.0",
-    "runtime": "0.72.0",
+    "runtime": "0.50.0",
     "governmentIntelligence": "0.72.0"
   },
   "architecture": {
@@ -19,24 +19,13 @@
       "learning",
       "platform"
     ],
-    "verticalSlice": "project profile + documents -> parsing -> facts -> evidence -> eligibility -> truth gate -> decision cards -> application route -> controlled forecast",
+    "verticalSlice": "official sources + project documents -> ingestion -> parsing -> evidence -> entities + canonical claims -> events + signals + relations -> temporal + graph + narrative analysis -> eligibility -> truth gate -> decision cards -> application route -> controlled forecast",
     "epistemicContract": [
       "signal-is-not-fact",
       "trend-is-not-requirement",
       "forecast-is-not-eligibility",
       "narrative-is-not-legal-basis"
     ]
-  },
-  "productExperience": {
-    "primaryJourney": [
-      "project-profile",
-      "documents-and-facts",
-      "verified-result-and-route"
-    ],
-    "mobileFirst": true,
-    "language": "ru",
-    "technicalErrorsHiddenByDefault": true,
-    "rawJsonInUserInterface": false
   },
   "qualityGates": [
     "strict-types",
@@ -48,10 +37,7 @@
     "replay-validation",
     "evidence-provenance",
     "truth-gated-decision-cards",
-    "controlled-forecasting",
-    "mobile-overflow",
-    "human-readable-errors",
-    "no-raw-json-ui"
+    "controlled-forecasting"
   ],
   "deployment": {
     "source": "GitHub",
