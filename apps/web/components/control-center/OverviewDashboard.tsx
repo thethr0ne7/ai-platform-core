@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import type { ReactNode } from 'react'
 import {
   Activity,
@@ -7,10 +8,8 @@ import {
   BookOpenText,
   Building2,
   CheckCircle2,
-  CircleGauge,
   Database,
   FileSearch,
-  GitBranch,
   ListChecks,
   RadioTower,
   RefreshCw,
@@ -34,237 +33,173 @@ export function OverviewDashboard() {
   const jobsFailed = numberValue(snapshot, 'jobs_failed')
 
   return (
-    <main className="space-y-3 py-3">
-      <section className="glass-surface relative overflow-hidden rounded-[28px] px-5 py-6 md:px-7 md:py-8">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_88%_20%,rgba(184,255,90,.12),transparent_26%),radial-gradient(circle_at_70%_100%,rgba(139,92,255,.13),transparent_28%)]" />
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-signal/70 to-transparent" />
+    <main className="space-y-4 py-4">
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,.55fr)]">
+        <article className="glass-surface relative overflow-hidden rounded-[34px] p-6 md:p-8">
+          <div className="pointer-events-none absolute -right-16 -top-20 h-72 w-72 rounded-full bg-signal/[.08] blur-3xl" />
+          <div className="relative">
+            <span className="inline-flex items-center gap-2 rounded-full border border-signal/25 bg-signal/[.1] px-3 py-2 text-[11px] font-medium text-signal">
+              <span className="signal-dot" /> Система работает
+            </span>
 
-        <div className="relative grid gap-7 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,.65fr)] xl:items-end">
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center gap-2 rounded-full border border-signal/20 bg-signal/[.055] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[.18em] text-signal">
-                <span className="signal-dot" /> Production online
-              </span>
-              <span className="rounded-full border border-white/[.07] bg-white/[.025] px-3 py-1.5 text-[10px] uppercase tracking-[.16em] text-white/45">
-                Build 0.54 / Interface pass
-              </span>
-            </div>
-
-            <p className="mt-8 text-[10px] font-semibold uppercase tracking-[.28em] text-white/35">
-              AI Platform Core · Operational command center
-            </p>
-            <h2 className="mt-3 max-w-4xl text-[clamp(2.4rem,5.5vw,5.4rem)] font-semibold leading-[.9] tracking-[-.065em]">
-              Платформа видит систему <span className="bg-gradient-to-r from-signal via-emerald-300 to-violet bg-clip-text text-transparent">целиком.</span>
+            <h2 className="mt-8 max-w-4xl text-[clamp(2.35rem,5vw,5rem)] font-semibold leading-[.94] tracking-[-.06em] text-mist">
+              Видно, что происходит и что делать дальше.
             </h2>
-            <p className="mt-5 max-w-2xl text-sm leading-6 text-mist md:text-base">
-              Единый слой управления данными, доказательствами, Government Intelligence и производственными контурами AI Factory.
+            <p className="mt-5 max-w-2xl text-sm leading-6 text-mist/55 md:text-base">
+              Здесь собраны данные, программы поддержки, состояние источников и работа производственного контура.
             </p>
 
-            <div className="mt-7 flex flex-wrap gap-3">
-              <button className="primary-cta" type="button">
-                Открыть активный контур <ArrowUpRight size={15} />
-              </button>
-              <button className="secondary-cta" type="button">
-                <RefreshCw size={15} /> Синхронизировать статус
-              </button>
+            <div className="mt-8 flex flex-wrap gap-3">
+              <Link className="primary-cta" href="/control-center/government">
+                Смотреть программы <ArrowUpRight size={16} />
+              </Link>
+              <Link className="secondary-cta" href="/control-center/health">
+                Проверить систему <Activity size={16} />
+              </Link>
+            </div>
+          </div>
+        </article>
+
+        <article className="glass-surface rounded-[34px] p-5 md:p-6">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="eyebrow">Коротко о главном</p>
+              <h3 className="section-title">Текущее состояние</h3>
+            </div>
+            <div className="brand-mark h-11 w-11">
+              <Sparkles size={18} />
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <SystemBadge icon={<ShieldCheck size={16} />} label="Evidence gate" value="ENFORCED" tone="signal" />
-            <SystemBadge icon={<Database size={16} />} label="Data plane" value="SUPABASE" tone="violet" />
-            <SystemBadge icon={<GitBranch size={16} />} label="Delivery" value="VERCEL" tone="violet" />
-            <SystemBadge icon={<Activity size={16} />} label="Runtime" value="HEALTHY" tone="signal" />
+          <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+            <StateTile label="Источники" value="Подключены" />
+            <StateTile label="Проверка данных" value="Включена" />
+            <StateTile label="Публикация" value="Автоматическая" />
+            <StateTile label="Основная версия" value="Работает" />
           </div>
-        </div>
+        </article>
       </section>
 
-      {stats.error ? <StatusPanel title="Метрики платформы недоступны" message={stats.error} /> : null}
+      {stats.error ? <StatusPanel title="Не удалось получить общие показатели" message={stats.error} /> : null}
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        <MetricCard
-          icon={<Building2 size={18} />}
-          label="Организации"
-          value={stats.data?.institutions_total}
-          loading={stats.loading}
-          code="DATA.01"
-          tone="signal"
-        />
-        <MetricCard
-          icon={<BookOpenText size={18} />}
-          label="Программы"
-          value={stats.data?.programs_total}
-          loading={stats.loading}
-          code="DATA.02"
-          tone="violet"
-        />
-        <MetricCard
-          icon={<RadioTower size={18} />}
-          label="Источники"
-          value={stats.data?.sources_total}
-          loading={stats.loading}
-          code="INTAKE.03"
-          tone="signal"
-        />
-        <MetricCard
-          icon={<ListChecks size={18} />}
-          label="Задачи ingestion"
-          value={stats.data?.ingestion_jobs_total}
-          loading={stats.loading}
-          code="QUEUE.04"
-          tone="amber"
-        />
-        <MetricCard
-          icon={<Sparkles size={18} />}
-          label="Запуски фабрики"
-          value={stats.data?.factory_runs_total}
-          loading={stats.loading}
-          code="FACTORY.05"
-          tone="violet"
-        />
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <MetricCard icon={<Building2 size={19} />} label="Организации" value={stats.data?.institutions_total} loading={stats.loading} />
+        <MetricCard icon={<BookOpenText size={19} />} label="Программы" value={stats.data?.programs_total} loading={stats.loading} />
+        <MetricCard icon={<RadioTower size={19} />} label="Источники" value={stats.data?.sources_total} loading={stats.loading} />
+        <MetricCard icon={<ListChecks size={19} />} label="Задачи на сбор" value={stats.data?.ingestion_jobs_total} loading={stats.loading} />
+        <MetricCard icon={<Sparkles size={19} />} label="Запуски фабрики" value={stats.data?.factory_runs_total} loading={stats.loading} />
       </section>
 
-      <section className="grid gap-3 2xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,.65fr)]">
-        <article className="glass-surface rounded-[26px] p-5 md:p-6">
+      <section className="grid gap-4 2xl:grid-cols-[minmax(0,1.35fr)_minmax(340px,.65fr)]">
+        <article className="glass-surface rounded-[32px] p-5 md:p-7">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <p className="eyebrow">DATA COVERAGE GATE</p>
-              <h3 className="section-title">Готовность федерального массива</h3>
+              <p className="eyebrow">Готовность данных</p>
+              <h3 className="section-title">Насколько заполнена база</h3>
             </div>
-            <span className="inline-flex items-center gap-2 rounded-full border border-signal/15 bg-signal/[.045] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[.16em] text-signal">
-              <CircleGauge size={13} /> {coverage.loading ? 'SYNCING' : coverage.error ? 'DEGRADED' : 'ACTIVE'}
+            <span className="inline-flex items-center gap-2 rounded-full border border-signal/25 bg-signal/[.08] px-3 py-2 text-[11px] font-medium text-signal">
+              <RefreshCw size={14} /> {coverage.loading ? 'Обновляем' : coverage.error ? 'Нужна проверка' : 'Данные получены'}
             </span>
           </div>
 
           {coverage.error ? (
-            <StatusPanel title="Снимок покрытия недоступен" message={coverage.error} compact />
+            <StatusPanel title="Не удалось получить данные о заполнении" message={coverage.error} compact />
           ) : (
             <div className="mt-7 space-y-6">
-              <CoverageRow
-                code="01"
-                title="Организации готовы к маршрутизации"
+              <ProgressRow
+                title="Организации готовы к поиску"
                 current={institutionsReady}
                 total={institutionsCatalog}
-                detail={`${institutionsReady.toLocaleString('ru-RU')} из ${institutionsCatalog.toLocaleString('ru-RU')} прошли route-ready gate`}
-                tone="signal"
+                detail={`${institutionsReady.toLocaleString('ru-RU')} из ${institutionsCatalog.toLocaleString('ru-RU')}`}
               />
-              <CoverageRow
-                code="02"
+              <ProgressRow
                 title="Программы подтверждены источниками"
                 current={programsVerified}
                 total={programsTotal}
-                detail={`${programsVerified.toLocaleString('ru-RU')} верифицированных программ`}
-                tone="violet"
+                detail={`${programsVerified.toLocaleString('ru-RU')} подтверждено`}
               />
-              <CoverageRow
-                code="03"
-                title="Очередь ingestion обработана"
+              <ProgressRow
+                title="Задачи по сбору выполнены"
                 current={jobsDone}
                 total={jobsTotal}
-                detail={`${jobsFailed.toLocaleString('ru-RU')} задач требуют восстановления`}
-                tone="amber"
+                detail={`${jobsFailed.toLocaleString('ru-RU')} требуют внимания`}
               />
             </div>
           )}
 
           <div className="mt-7 grid gap-3 md:grid-cols-3">
-            <GateTile label="Каталог" value={institutionsCatalog} state="loaded" />
-            <GateTile label="Route-ready" value={institutionsReady} state="verified" />
-            <GateTile label="Failed jobs" value={jobsFailed} state={jobsFailed > 0 ? 'attention' : 'verified'} />
+            <SmallNumber label="Всего организаций" value={institutionsCatalog} />
+            <SmallNumber label="Готовы к поиску" value={institutionsReady} accent />
+            <SmallNumber label="Ошибки сбора" value={jobsFailed} />
           </div>
         </article>
 
-        <article className="glass-surface rounded-[26px] p-5 md:p-6">
-          <div className="flex items-start justify-between gap-4">
+        <article className="glass-surface rounded-[32px] p-5 md:p-7">
+          <div className="section-head">
             <div>
-              <p className="eyebrow">FACTORY PIPELINE</p>
-              <h3 className="section-title">Производственный цикл</h3>
+              <p className="eyebrow">Порядок работы</p>
+              <h3 className="section-title">Как проходит задача</h3>
             </div>
-            <span className="text-[10px] uppercase tracking-[.18em] text-white/30">11 nodes</span>
+            <ShieldCheck size={19} className="text-signal" />
           </div>
 
-          <div className="mt-6 space-y-2">
-            {[
-              ['01', 'INPUT', 'ready'],
-              ['02', 'CLARIFY', 'ready'],
-              ['03', 'PLAN', 'ready'],
-              ['04', 'ARCHITECT', 'active'],
-              ['05', 'PRODUCE', 'queued'],
-              ['06', 'VALIDATE', 'queued'],
-            ].map(([index, label, state]) => (
-              <div
-                key={label}
-                className={`grid grid-cols-[36px_minmax(0,1fr)_72px] items-center gap-3 rounded-2xl border px-3 py-3 ${
-                  state === 'active'
-                    ? 'border-signal/25 bg-signal/[.055]'
-                    : 'border-white/[.055] bg-white/[.018]'
-                }`}
-              >
-                <span className="font-mono text-[10px] text-white/30">{index}</span>
-                <span className="font-mono text-xs tracking-[.12em] text-white/75">{label}</span>
-                <span
-                  className={`text-right font-mono text-[9px] uppercase tracking-[.12em] ${
-                    state === 'active' ? 'text-signal' : state === 'ready' ? 'text-white/45' : 'text-white/20'
-                  }`}
-                >
-                  {state}
-                </span>
-              </div>
-            ))}
+          <div className="space-y-3">
+            <StepRow number="1" title="Понять цель" status="Готово" done />
+            <StepRow number="2" title="Составить план" status="Готово" done />
+            <StepRow number="3" title="Собрать решение" status="В работе" active />
+            <StepRow number="4" title="Проверить результат" status="Далее" />
+            <StepRow number="5" title="Опубликовать" status="Далее" />
           </div>
         </article>
       </section>
 
-      <section className="grid gap-3 xl:grid-cols-[minmax(0,.8fr)_minmax(0,1.2fr)]">
-        <article className="glass-surface rounded-[26px] p-5 md:p-6">
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,.78fr)_minmax(0,1.22fr)]">
+        <article className="glass-surface rounded-[32px] p-5 md:p-7">
           <div className="section-head">
             <div>
-              <p className="eyebrow">RUNTIME MODULES</p>
-              <h3 className="section-title">Контуры платформы</h3>
+              <p className="eyebrow">Подключённые части</p>
+              <h3 className="section-title">Что уже работает</h3>
             </div>
-            <FileSearch size={17} className="text-signal" />
+            <FileSearch size={19} className="text-signal" />
           </div>
-          <div className="space-y-2">
-            <ModuleRow name="Government Intelligence" code="GI_CORE" status="active" />
-            <ModuleRow name="Evidence & Source Registry" code="EVIDENCE" status="active" />
-            <ModuleRow name="Async Ingestion Worker" code="INGEST_V053" status="ready" />
-            <ModuleRow name="Learning Memory" code="MEMORY" status="guarded" />
+          <div className="space-y-3">
+            <ModuleRow name="Поиск мер поддержки" status="Работает" />
+            <ModuleRow name="Проверка официальных источников" status="Работает" />
+            <ModuleRow name="Автоматический сбор данных" status="Готов" />
+            <ModuleRow name="Память решений" status="Под защитой" />
           </div>
         </article>
 
-        <article className="glass-surface rounded-[26px] p-5 md:p-6">
+        <article className="glass-surface rounded-[32px] p-5 md:p-7">
           <div className="section-head">
             <div>
-              <p className="eyebrow">RECENT FACTORY RUNS</p>
-              <h3 className="section-title">Последняя активность</h3>
+              <p className="eyebrow">Последние запуски</p>
+              <h3 className="section-title">Что происходило недавно</h3>
             </div>
-            <span className="text-[10px] uppercase tracking-[.16em] text-white/30">Live feed</span>
+            <span className="flex items-center gap-2 text-[11px] text-signal"><span className="signal-dot" /> Обновляется</span>
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-3">
             {stats.loading ? (
-              <div className="rounded-2xl border border-white/[.055] bg-white/[.018] p-4 text-sm text-mist">Загрузка запусков…</div>
+              <div className="clay-inset rounded-[22px] p-5 text-sm text-mist/45">Получаем последние запуски…</div>
             ) : stats.data?.recent_runs.length ? (
               stats.data.recent_runs.map((run, index) => (
-                <div
-                  key={run.id ?? index}
-                  className="grid gap-3 rounded-2xl border border-white/[.055] bg-white/[.018] p-4 md:grid-cols-[38px_minmax(0,1fr)_110px] md:items-center"
-                >
-                  <span className="font-mono text-xs text-white/25">{String(index + 1).padStart(2, '0')}</span>
+                <div key={run.id ?? index} className="clay-inset grid gap-3 rounded-[22px] p-4 md:grid-cols-[40px_minmax(0,1fr)_110px] md:items-center">
+                  <span className="grid h-9 w-9 place-items-center rounded-[14px] bg-mist/[.05] text-xs text-mist/40">{index + 1}</span>
                   <div>
-                    <p className="text-sm font-medium text-white/80">Factory execution</p>
-                    <p className="mt-1 text-[11px] text-mist">{formatTimestamp(run.started_at)}</p>
+                    <p className="text-sm font-medium text-mist/85">Запуск производственного контура</p>
+                    <p className="mt-1 text-[11px] text-mist/40">{formatTimestamp(run.started_at)}</p>
                   </div>
-                  <span className="w-fit rounded-full border border-signal/15 bg-signal/[.05] px-3 py-1 text-[9px] font-semibold uppercase tracking-[.14em] text-signal md:justify-self-end">
-                    {run.status ?? 'recorded'}
+                  <span className="w-fit rounded-full border border-signal/25 bg-signal/[.08] px-3 py-1.5 text-[10px] font-medium text-signal md:justify-self-end">
+                    {translateStatus(run.status)}
                   </span>
                 </div>
               ))
             ) : (
-              <div className="rounded-2xl border border-dashed border-white/[.08] bg-black/15 p-6 text-center">
-                <CheckCircle2 className="mx-auto text-signal" size={22} />
-                <p className="mt-3 text-sm font-medium">Журнал готов к новым запускам</p>
-                <p className="mt-1 text-xs text-mist">События фабрики появятся здесь после следующего production run.</p>
+              <div className="clay-inset rounded-[22px] p-7 text-center">
+                <CheckCircle2 className="mx-auto text-signal" size={24} />
+                <p className="mt-3 text-sm font-medium">Журнал готов</p>
+                <p className="mt-1 text-xs text-mist/45">Новые события появятся после следующего запуска.</p>
               </div>
             )}
           </div>
@@ -274,145 +209,85 @@ export function OverviewDashboard() {
   )
 }
 
-function MetricCard({
-  icon,
-  label,
-  value,
-  loading,
-  code,
-  tone,
-}: {
-  icon: ReactNode
-  label: string
-  value?: number
-  loading: boolean
-  code: string
-  tone: 'signal' | 'violet' | 'amber'
-}) {
-  const toneClasses = {
-    signal: 'text-signal border-signal/15 bg-signal/[.055]',
-    violet: 'text-violet border-violet/15 bg-violet/[.055]',
-    amber: 'text-amber border-amber/15 bg-amber/[.055]',
-  }
-
+function MetricCard({ icon, label, value, loading }: { icon: ReactNode; label: string; value?: number; loading: boolean }) {
   return (
-    <article className="glass-surface group rounded-[22px] p-4 transition duration-300 hover:-translate-y-0.5 hover:border-white/[.13]">
+    <article className="glass-surface group rounded-[28px] p-5 transition duration-300 hover:-translate-y-0.5">
       <div className="flex items-start justify-between gap-3">
-        <div className={`grid h-9 w-9 place-items-center rounded-xl border ${toneClasses[tone]}`}>{icon}</div>
-        <span className="font-mono text-[9px] tracking-[.16em] text-white/25">{code}</span>
+        <div className="grid h-11 w-11 place-items-center rounded-[17px] border border-signal/20 bg-signal/[.09] text-signal">{icon}</div>
+        <ArrowUpRight size={15} className="text-mist/20 transition group-hover:text-signal" />
       </div>
-      <strong className="mt-6 block text-3xl font-semibold tabular-nums tracking-[-.045em] md:text-4xl">
-        {loading ? '···' : (value ?? 0).toLocaleString('ru-RU')}
+      <strong className="mt-7 block text-4xl font-semibold tabular-nums tracking-[-.05em] text-mist">
+        {loading ? '…' : (value ?? 0).toLocaleString('ru-RU')}
       </strong>
-      <div className="mt-2 flex items-center justify-between gap-3">
-        <span className="text-xs text-mist">{label}</span>
-        <ArrowUpRight size={13} className="text-white/20 transition group-hover:text-signal" />
-      </div>
+      <p className="mt-2 text-xs text-mist/45">{label}</p>
     </article>
   )
 }
 
-function SystemBadge({
-  icon,
-  label,
-  value,
-  tone,
-}: {
-  icon: ReactNode
-  label: string
-  value: string
-  tone: 'signal' | 'violet'
-}) {
-  const color = tone === 'signal' ? 'text-signal' : 'text-violet'
-
+function StateTile({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-white/[.065] bg-black/20 p-4">
-      <div className={`flex items-center gap-2 ${color}`}>
-        {icon}
-        <span className="text-[9px] uppercase tracking-[.16em]">{label}</span>
-      </div>
-      <p className="mt-4 font-mono text-xs tracking-[.12em] text-white/75">{value}</p>
+    <div className="clay-inset rounded-[20px] p-4">
+      <p className="text-[11px] text-mist/40">{label}</p>
+      <p className="mt-2 flex items-center gap-2 text-sm font-medium text-mist/85"><span className="signal-dot" /> {value}</p>
     </div>
   )
 }
 
-function CoverageRow({
-  code,
-  title,
-  current,
-  total,
-  detail,
-  tone,
-}: {
-  code: string
-  title: string
-  current: number
-  total: number
-  detail: string
-  tone: 'signal' | 'violet' | 'amber'
-}) {
+function ProgressRow({ title, current, total, detail }: { title: string; current: number; total: number; detail: string }) {
   const percent = total > 0 ? Math.min(100, Math.round((current / total) * 100)) : 0
-  const barClasses = {
-    signal: 'bg-signal shadow-[0_0_16px_rgba(184,255,90,.4)]',
-    violet: 'bg-violet shadow-[0_0_16px_rgba(139,92,255,.4)]',
-    amber: 'bg-amber shadow-[0_0_16px_rgba(255,207,102,.35)]',
-  }
 
   return (
     <div>
-      <div className="grid grid-cols-[34px_minmax(0,1fr)_50px] items-start gap-3">
-        <span className="font-mono text-[10px] text-white/25">{code}</span>
+      <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-medium text-white/80">{title}</p>
-          <p className="mt-1 text-[11px] leading-5 text-mist">{detail}</p>
+          <p className="text-sm font-medium text-mist/85">{title}</p>
+          <p className="mt-1 text-[11px] text-mist/40">{detail}</p>
         </div>
-        <span className="text-right font-mono text-xs text-white/65">{percent}%</span>
+        <span className="font-medium tabular-nums text-signal">{percent}%</span>
       </div>
-      <div className="ml-[46px] mt-3 h-1.5 overflow-hidden rounded-full bg-white/[.05]">
-        <div className={`h-full rounded-full ${barClasses[tone]}`} style={{ width: `${percent}%` }} />
+      <div className="clay-inset mt-3 h-3 overflow-hidden rounded-full p-[3px]">
+        <div className="h-full rounded-full bg-signal transition-all" style={{ width: `${percent}%` }} />
       </div>
     </div>
   )
 }
 
-function GateTile({ label, value, state }: { label: string; value: number; state: 'loaded' | 'verified' | 'attention' }) {
-  const styles = {
-    loaded: 'text-violet',
-    verified: 'text-signal',
-    attention: 'text-amber',
-  }
-
+function SmallNumber({ label, value, accent = false }: { label: string; value: number; accent?: boolean }) {
   return (
-    <div className="rounded-2xl border border-white/[.055] bg-black/20 p-4">
-      <p className="text-[9px] uppercase tracking-[.17em] text-white/30">{label}</p>
-      <p className={`mt-3 text-2xl font-semibold tabular-nums ${styles[state]}`}>{value.toLocaleString('ru-RU')}</p>
+    <div className="clay-inset rounded-[22px] p-4">
+      <p className="text-[11px] text-mist/40">{label}</p>
+      <p className={`mt-3 text-2xl font-semibold tabular-nums ${accent ? 'text-signal' : 'text-mist'}`}>{value.toLocaleString('ru-RU')}</p>
     </div>
   )
 }
 
-function ModuleRow({ name, code, status }: { name: string; code: string; status: 'active' | 'ready' | 'guarded' }) {
-  const statusStyle = {
-    active: 'text-signal',
-    ready: 'text-violet',
-    guarded: 'text-amber',
-  }
-
+function StepRow({ number, title, status, done = false, active = false }: { number: string; title: string; status: string; done?: boolean; active?: boolean }) {
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_90px] gap-3 rounded-2xl border border-white/[.055] bg-white/[.018] p-4">
-      <div>
-        <p className="text-sm font-medium text-white/80">{name}</p>
-        <p className="mt-1 font-mono text-[9px] tracking-[.14em] text-white/25">{code}</p>
+    <div className={`grid grid-cols-[42px_minmax(0,1fr)_72px] items-center gap-3 rounded-[22px] border p-3 ${active ? 'border-signal/30 bg-signal/[.08]' : 'border-mist/[.07] bg-ink/35'}`}>
+      <span className={`grid h-9 w-9 place-items-center rounded-[14px] ${done || active ? 'bg-signal text-ink' : 'bg-mist/[.05] text-mist/35'}`}>{number}</span>
+      <span className="text-sm text-mist/80">{title}</span>
+      <span className={`text-right text-[10px] ${done || active ? 'text-signal' : 'text-mist/30'}`}>{status}</span>
+    </div>
+  )
+}
+
+function ModuleRow({ name, status }: { name: string; status: string }) {
+  return (
+    <div className="clay-inset flex items-center justify-between gap-4 rounded-[22px] p-4">
+      <div className="flex items-center gap-3">
+        <span className="grid h-9 w-9 place-items-center rounded-[14px] bg-signal/[.1] text-signal"><Database size={16} /></span>
+        <p className="text-sm text-mist/80">{name}</p>
       </div>
-      <span className={`self-center text-right font-mono text-[9px] uppercase tracking-[.14em] ${statusStyle[status]}`}>{status}</span>
+      <span className="text-[10px] font-medium text-signal">{status}</span>
     </div>
   )
 }
 
 function StatusPanel({ title, message, compact = false }: { title: string; message: string; compact?: boolean }) {
   return (
-    <div className={`rounded-2xl border border-danger/20 bg-danger/[.055] text-danger ${compact ? 'mt-5 p-4' : 'p-5'}`}>
+    <div className={`rounded-[22px] border border-signal/25 bg-signal/[.07] text-mist ${compact ? 'mt-5 p-4' : 'p-5'}`}>
       <p className="text-sm font-semibold">{title}</p>
-      <p className="mt-1 text-xs leading-5 text-white/45">{message}</p>
+      <p className="mt-1 text-xs leading-5 text-mist/50">{message}</p>
     </div>
   )
 }
@@ -423,7 +298,15 @@ function numberValue(record: Record<string, unknown> | null, key: string): numbe
 }
 
 function formatTimestamp(value?: string): string {
-  if (!value) return 'Время не зафиксировано'
+  if (!value) return 'Время не указано'
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString('ru-RU', { dateStyle: 'medium', timeStyle: 'short' })
+}
+
+function translateStatus(status?: string): string {
+  const value = status?.toLowerCase()
+  if (value === 'completed' || value === 'success' || value === 'ready') return 'Готово'
+  if (value === 'running' || value === 'active') return 'В работе'
+  if (value === 'failed' || value === 'error') return 'Нужна проверка'
+  return 'Записано'
 }

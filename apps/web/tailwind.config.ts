@@ -5,17 +5,17 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        ink: "#0a0a0b",
-        panel: "#111214",
-        line: "#24262b",
-        mist: "#a6a8ad",
-        signal: "#b8ff5a",
-        violet: "#8b5cff",
-        amber: "#ffcf66",
-        danger: "#ff7a7a"
+        ink: "#11130F",
+        panel: "#1A1D17",
+        line: "rgba(239, 242, 232, 0.12)",
+        mist: "#EFF2E8",
+        signal: "#B8FF3D",
+        violet: "#EFF2E8",
+        amber: "#B8FF3D",
+        danger: "#B8FF3D"
       },
       boxShadow: {
-        panel: "0 20px 60px rgba(0,0,0,.28)"
+        panel: "14px 14px 34px rgba(0,0,0,.34), -8px -8px 24px rgba(239,242,232,.025), inset 0 1px 0 rgba(239,242,232,.09)"
       }
     }
   },

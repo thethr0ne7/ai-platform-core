@@ -3,10 +3,10 @@
 import { Bell, Command, Search } from 'lucide-react'
 import { usePathname } from 'next/navigation'
 
-const labels: Record<string, { title: string; code: string }> = {
-  '/control-center': { title: 'Обзор платформы', code: 'SYS.OVERVIEW' },
-  '/control-center/government': { title: 'Government Intelligence', code: 'INTEL.GOV' },
-  '/control-center/health': { title: 'Здоровье фабрики', code: 'OPS.HEALTH' },
+const labels: Record<string, { title: string; subtitle: string }> = {
+  '/control-center': { title: 'Главная', subtitle: 'Общая картина работы платформы' },
+  '/control-center/government': { title: 'Поддержка и программы', subtitle: 'Новые меры, изменения и полезные сигналы' },
+  '/control-center/health': { title: 'Состояние системы', subtitle: 'Запуски, ошибки и подключённые сервисы' },
 }
 
 export default function Header() {
@@ -16,29 +16,25 @@ export default function Header() {
   return (
     <header className="topbar glass-surface">
       <div className="min-w-0">
-        <p className="truncate text-[9px] font-semibold uppercase tracking-[.24em] text-signal/70">
-          {current.code}
-        </p>
-        <h1 className="mt-1 truncate text-sm font-semibold tracking-[-.01em] text-white md:text-base">
-          {current.title}
-        </h1>
+        <h1 className="truncate text-sm font-semibold text-mist md:text-base">{current.title}</h1>
+        <p className="mt-1 hidden truncate text-[11px] text-mist/40 sm:block">{current.subtitle}</p>
       </div>
 
-      <button className="command-trigger" type="button" aria-label="Открыть командный поиск">
-        <Search size={16} strokeWidth={1.7} />
-        <span>Поиск по источникам, задачам и сигналам</span>
+      <button className="command-trigger" type="button" aria-label="Открыть поиск">
+        <Search size={17} strokeWidth={1.8} />
+        <span>Найти программу, источник или задачу</span>
         <kbd className="flex items-center gap-1">
           <Command size={10} /> K
         </kbd>
       </button>
 
       <div className="flex items-center gap-2">
-        <div className="hidden items-center gap-2 rounded-full border border-signal/15 bg-signal/[.045] px-3 py-2 text-[10px] font-medium text-signal md:flex">
+        <div className="hidden items-center gap-2 rounded-full border border-signal/25 bg-signal/[.1] px-3 py-2 text-[11px] font-medium text-signal md:flex">
           <span className="signal-dot" />
-          SYSTEM READY
+          Всё работает
         </div>
         <button className="icon-button" type="button" aria-label="Уведомления">
-          <Bell size={16} strokeWidth={1.7} />
+          <Bell size={17} strokeWidth={1.8} />
         </button>
         <div className="avatar">T7</div>
       </div>
