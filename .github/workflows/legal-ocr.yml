@@ -1,6 +1,12 @@
 name: Legal OCR
 
 on:
+  pull_request:
+    paths:
+      - '.github/workflows/legal-ocr.yml'
+      - 'services/legal-ocr-worker/**'
+      - 'supabase/functions/legal-ocr-broker/**'
+      - 'supabase/migrations/*legal_ocr*'
   schedule:
     - cron: '7,22,37,52 * * * *'
   workflow_dispatch:
@@ -10,12 +16,30 @@ permissions:
   id-token: write
 
 concurrency:
-  group: legal-ocr-production
+  group: legal-ocr-${{ github.event_name }}
   cancel-in-progress: false
 
 jobs:
+  validate:
+    name: Validate legal OCR worker
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Compile worker
+        run: python -m py_compile services/legal-ocr-worker/worker.py
+
   process:
     name: Process legal OCR queue
+    if: github.event_name != 'pull_request'
+    needs: validate
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     env:
