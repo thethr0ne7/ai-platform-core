@@ -346,8 +346,8 @@ begin
     task_id,evidence_record_id,reviewer_telegram_user_id,decision,
     before_state,after_state,notes,review_mode
   ) values (
-    p_task_id,v_evidence_id,p_reviewer_telegram_user_id,p_decision,
-    v_before,v_after,nullif(btrim(coalesce(p_notes,'')),'') ,'human'
+    p_task_id,v_evidence_id,p_reviewer_telegram_id,p_decision,
+    v_before,v_after,nullif(btrim(coalesce(p_notes,'')),''),'human'
   );
 
   return jsonb_build_object(
