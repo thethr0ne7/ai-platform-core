@@ -102,11 +102,21 @@ Deno.serve(async (req) => {
         ...((finalData?.metadata as Record<string, unknown>) ?? {}),
         source_health_engine: "official-source-ingestion-v0.59",
         truth_gate_engine: "measure-scoped-truth-gate-v0.64",
-        eligibility_engine: "deterministic-eligibility-v0.62",
+        eligibility_engine: "deterministic-eligibility-v0.70",
         report_finalizer: "project-report-finalizer-v0.63",
+        persistence_engine: "final-report-persistence-v0.71",
         source_catalog_generated_at: new Date().toISOString(),
       },
     };
+
+    if (checkId) {
+      const persisted = await db
+        .from("gi_project_checks")
+        .update({ result: report })
+        .eq("id", checkId)
+        .eq("telegram_user_id", telegramUserId);
+      if (persisted.error) throw persisted.error;
+    }
 
     return jsonResponse({ report });
   } catch (error) {
