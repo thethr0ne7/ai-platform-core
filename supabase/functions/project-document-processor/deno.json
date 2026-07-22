@@ -1,0 +1,7 @@
+{
+  "imports": {
+    "supabase": "npm:@supabase/supabase-js@2.57.4",
+    "jszip": "npm:jszip@3.10.1",
+    "unpdf": "npm:unpdf@1.6.2"
+  }
+}
