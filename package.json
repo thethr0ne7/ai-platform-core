@@ -17,8 +17,9 @@
     "verify": "npm run check && npm test",
     "build": "tsc",
     "build:info": "tsx scripts/generate-build-info.ts",
+    "web:check": "npm --workspace @thr0ne7/web run check",
     "web:build": "npm --workspace @thr0ne7/web run build",
-    "platform:verify": "npm run verify && npm run web:build"
+    "platform:verify": "npm run verify && npm run web:check && npm run web:build"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

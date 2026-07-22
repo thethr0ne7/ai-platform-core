@@ -23,6 +23,16 @@ export type TelegramIdentity = {
   photoUrl: string | null;
 };
 
+export type TelegramProjectDocument = {
+  id: string;
+  file_name: string;
+  category: string;
+  mime_type: string | null;
+  byte_size: number;
+  analysis_status: string;
+  created_at: string;
+};
+
 export type TelegramProject = {
   id: string;
   name: string;
@@ -33,15 +43,7 @@ export type TelegramProject = {
   status: string;
   created_at: string;
   updated_at: string;
-  gi_project_documents?: Array<{
-    id: string;
-    file_name: string;
-    category: string;
-    mime_type: string | null;
-    byte_size: number;
-    analysis_status: string;
-    created_at: string;
-  }>;
+  gi_project_documents?: TelegramProjectDocument[];
   gi_project_checks?: Array<{
     id: string;
     status: string;
@@ -51,6 +53,32 @@ export type TelegramProject = {
     started_at: string;
     finished_at: string | null;
   }>;
+};
+
+export type ProjectFactCandidate = {
+  id: string;
+  project_id: string;
+  document_id: string;
+  fact_code: string;
+  fact_label: string;
+  fact_type: string;
+  value: Record<string, unknown>;
+  quote: string;
+  locator: string;
+  confidence: number;
+  status: "pending_confirmation" | "confirmed" | "rejected";
+  created_at: string;
+  gi_project_documents?: {
+    file_name?: string;
+    category?: string;
+    analysis_status?: string;
+  } | null;
+};
+
+export type ProjectFactReviewSummary = {
+  pending_confirmation: number;
+  confirmed: number;
+  rejected: number;
 };
 
 const functionName = "telegram-project-api";
@@ -80,8 +108,8 @@ async function readFunctionError(error: unknown) {
     if (typeof body.message === "string" && body.message.trim()) return body.message;
   } catch {
     try {
-      const text = await context.clone().text();
-      if (text.trim()) return text;
+      const responseText = await context.clone().text();
+      if (responseText.trim()) return responseText;
     } catch {
       // Keep the original SDK error.
     }
@@ -90,28 +118,55 @@ async function readFunctionError(error: unknown) {
   return fallback;
 }
 
-export async function callTelegramApi<T>(action: string, payload: Record<string, unknown> = {}): Promise<T> {
+async function invokeTelegramFunction<T>(name: string, body: Record<string, unknown>): Promise<T> {
   const initData = getTelegramInitData();
   if (!initData) throw new Error("Откройте приложение через Telegram-бота @stateappstartup_bot.");
 
-  const { data, error } = await supabase.functions.invoke(functionName, {
-    body: { action, initData, ...payload },
+  const { data, error } = await supabase.functions.invoke(name, {
+    body: { initData, ...body },
   });
   if (error) throw new Error(await readFunctionError(error));
   if (data?.error) throw new Error(String(data.error));
   return data as T;
 }
 
-export async function callGovernmentOpportunityApi<T>(projectId: string): Promise<T> {
-  const initData = getTelegramInitData();
-  if (!initData) throw new Error("Откройте приложение через Telegram-бота @stateappstartup_bot.");
+export async function callTelegramApi<T>(action: string, payload: Record<string, unknown> = {}): Promise<T> {
+  return invokeTelegramFunction<T>(functionName, { action, ...payload });
+}
 
-  const { data, error } = await supabase.functions.invoke("government-opportunity-api", {
-    body: { initData, projectId },
-  });
-  if (error) throw new Error(await readFunctionError(error));
-  if (data?.error) throw new Error(String(data.error));
-  return data as T;
+export async function callGovernmentOpportunityApi<T>(projectId: string): Promise<T> {
+  return invokeTelegramFunction<T>("government-opportunity-api", { projectId });
+}
+
+export async function requestDocumentProcessing(documentId: string) {
+  return invokeTelegramFunction<{ accepted: boolean; background: boolean; documentId: string }>(
+    "project-document-processor",
+    { documentId },
+  );
+}
+
+export async function listProjectFactCandidates(projectId: string) {
+  return invokeTelegramFunction<{ candidates: ProjectFactCandidate[] }>(
+    "project-fact-review",
+    { action: "list", projectId },
+  );
+}
+
+export async function getProjectFactReviewSummary(projectId: string) {
+  return invokeTelegramFunction<{ summary: ProjectFactReviewSummary }>(
+    "project-fact-review",
+    { action: "summary", projectId },
+  );
+}
+
+export async function reviewProjectFactCandidate(
+  candidateId: string,
+  decision: "confirmed" | "rejected",
+) {
+  return invokeTelegramFunction<{ review: Record<string, unknown> }>(
+    "project-fact-review",
+    { action: "review", candidateId, decision },
+  );
 }
 
 export async function authenticateTelegram() {

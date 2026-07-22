@@ -22,6 +22,7 @@ import {
   callTelegramApi,
   initializeTelegramMiniApp,
   listTelegramProjects,
+  requestDocumentProcessing,
   type TelegramIdentity,
   type TelegramProject,
 } from "../lib/telegram";
@@ -29,6 +30,7 @@ import {
   GovernmentOpportunityReport,
   type GovernmentOpportunityReportData,
 } from "./government-opportunity-report";
+import { ProjectFactReview } from "./project-fact-review";
 
 type DraftDocument = { id: string; file: File; category: string; uploaded: boolean };
 type ProjectDraft = {
@@ -56,7 +58,7 @@ const categories = [
   "Другое",
 ];
 const MAX_FILE_SIZE = 25 * 1024 * 1024;
-const ACCEPTED_EXTENSIONS = ["pdf", "doc", "docx", "xls", "xlsx", "csv", "txt", "jpg", "jpeg", "png", "webp"];
+const ACCEPTED_EXTENSIONS = ["pdf", "docx", "csv", "txt", "jpg", "jpeg", "png", "webp"];
 
 export function TelegramProjectWorkspace() {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -129,7 +131,7 @@ export function TelegramProjectWorkspace() {
 
     for (const file of Array.from(fileList)) {
       const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
-      if (!ACCEPTED_EXTENSIONS.includes(extension)) rejected.push(`${file.name}: неподдерживаемый формат`);
+      if (!ACCEPTED_EXTENSIONS.includes(extension)) rejected.push(`${file.name}: формат пока не разбирается системой`);
       else if (file.size > MAX_FILE_SIZE) rejected.push(`${file.name}: размер больше 25 МБ`);
       else accepted.push({ id: crypto.randomUUID(), file, category, uploaded: false });
     }
@@ -164,37 +166,55 @@ export function TelegramProjectWorkspace() {
       const projectId = result.project.id;
       setDraft((current) => ({ ...current, id: projectId }));
       const pending = documents.filter((item) => !item.uploaded);
+      let uploadedNow = 0;
+      const uploadErrors: string[] = [];
 
       for (let index = 0; index < pending.length; index += 1) {
         const document = pending[index];
         setMessage(`Загрузка ${index + 1} из ${pending.length}: ${document.file.name}`);
-        const upload = await callTelegramApi<{ path: string; token: string }>("create_upload_url", {
-          projectId,
-          fileName: document.file.name,
-        });
-        const storageResult = await supabase.storage
-          .from("gi-project-documents")
-          .uploadToSignedUrl(upload.path, upload.token, document.file, {
-            contentType: document.file.type || "application/octet-stream",
-          });
-        if (storageResult.error) throw new Error(`Не удалось загрузить ${document.file.name}: ${storageResult.error.message}`);
 
-        await callTelegramApi("register_document", {
-          document: {
+        try {
+          const upload = await callTelegramApi<{ path: string; token: string }>("create_upload_url", {
             projectId,
-            category: document.category,
             fileName: document.file.name,
-            storagePath: upload.path,
-            mimeType: document.file.type || null,
-            byteSize: document.file.size,
-          },
-        });
-        setDocuments((current) => current.map((item) => item.id === document.id ? { ...item, uploaded: true } : item));
+          });
+          const storageResult = await supabase.storage
+            .from("gi-project-documents")
+            .uploadToSignedUrl(upload.path, upload.token, document.file, {
+              contentType: document.file.type || "application/octet-stream",
+            });
+          if (storageResult.error) throw new Error(storageResult.error.message);
+
+          const registered = await callTelegramApi<{ document: { id: string } }>("register_document", {
+            document: {
+              projectId,
+              category: document.category,
+              fileName: document.file.name,
+              storagePath: upload.path,
+              mimeType: document.file.type || null,
+              byteSize: document.file.size,
+            },
+          });
+          setDocuments((current) => current.map((item) => item.id === document.id ? { ...item, uploaded: true } : item));
+          uploadedNow += 1;
+
+          void requestDocumentProcessing(registered.document.id).catch(() => {
+            // The durable Supabase queue is a fallback when the immediate trigger is unavailable.
+          });
+        } catch (error) {
+          uploadErrors.push(`${document.file.name}: ${error instanceof Error ? error.message : "ошибка загрузки"}`);
+        }
       }
 
       const list = await listTelegramProjects();
       setProjects(list.projects);
-      setMessage(pending.length ? `Проект сохранён. Загружено документов: ${pending.length}.` : "Проект сохранён.");
+      if (uploadErrors.length) {
+        setMessage(`Проект сохранён. Загружено: ${uploadedNow}. Не загружено: ${uploadErrors.length}. ${uploadErrors.join("; ")}`);
+      } else {
+        setMessage(uploadedNow
+          ? `Проект сохранён. Загружено документов: ${uploadedNow}. Начат разбор файлов.`
+          : "Проект сохранён.");
+      }
       return projectId;
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Ошибка сохранения проекта.");
@@ -210,7 +230,7 @@ export function TelegramProjectWorkspace() {
 
     setBusy(true);
     setReport(null);
-    setMessage("Проверяем проект, документы, официальные источники, изменения, меры поддержки и план действий…");
+    setMessage("Проверяем проект, документы, официальные источники, изменения, требования мер поддержки и план действий…");
 
     try {
       const result = await callGovernmentOpportunityApi<{ report: GovernmentOpportunityReportData }>(projectId);
@@ -219,9 +239,11 @@ export function TelegramProjectWorkspace() {
       setProjects(list.projects);
 
       const readiness = Math.round(result.report.readiness?.score ?? 0);
-      const matches = result.report.measure_matches?.length ?? result.report.support_measures?.length ?? 0;
+      const measureMatches = result.report.measure_matches ?? [];
+      const confirmedMatches = measureMatches.filter((item) => item.eligibility_status === "match").length;
+      const reviewMatches = measureMatches.filter((item) => item.eligibility_status === "manual_review" || item.eligibility_status === "insufficient_data").length;
       const openTasks = result.report.readiness?.open_tasks ?? result.report.roadmap?.length ?? 0;
-      setMessage(`Анализ завершён. Готовность проекта: ${readiness}%. Подходящих вариантов: ${matches}. Действий в плане: ${openTasks}.`);
+      setMessage(`Анализ завершён. Готовность: ${readiness}%. Подтверждённо подходит: ${confirmedMatches}. Требуют проверки: ${reviewMatches}. Действий: ${openTasks}.`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Ошибка запуска анализа.");
     } finally {
@@ -301,10 +323,10 @@ export function TelegramProjectWorkspace() {
 
             <div className="rounded-[24px] border border-white/10 p-4 sm:p-5">
               <Field label="Категория документа"><select value={category} onChange={(event) => setCategory(event.target.value)}>{categories.map((item) => <option key={item}>{item}</option>)}</select></Field>
-              <label className="primary-cta relative mt-4 flex w-full cursor-pointer items-center justify-center overflow-hidden"><FileUp size={16} /> Добавить файлы<input ref={inputRef} className="absolute inset-0 h-full w-full cursor-pointer opacity-0" type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.jpg,.jpeg,.png,.webp" onChange={(event) => addFiles(event.currentTarget.files)} disabled={busy} /></label>
-              <p className="mt-3 text-xs leading-5 text-mist">PDF, Word, Excel, CSV, TXT и изображения. Максимум 25 МБ.</p>
+              <label className="primary-cta relative mt-4 flex w-full cursor-pointer items-center justify-center overflow-hidden"><FileUp size={16} /> Добавить файлы<input ref={inputRef} className="absolute inset-0 h-full w-full cursor-pointer opacity-0" type="file" multiple accept=".pdf,.docx,.csv,.txt,.jpg,.jpeg,.png,.webp" onChange={(event) => addFiles(event.currentTarget.files)} disabled={busy} /></label>
+              <p className="mt-3 text-xs leading-5 text-mist">PDF, DOCX, CSV, TXT и изображения. Максимум 25 МБ. Сканам может потребоваться OCR.</p>
               <div className="mt-4 space-y-2">
-                {documents.map((document) => <div key={document.id} className="flex items-center gap-3 rounded-xl bg-white/[.03] p-3"><div className="min-w-0 flex-1"><p className="truncate text-sm">{document.file.name}</p><p className="text-xs text-mist">{document.category} · {document.uploaded ? "загружен" : "готов к загрузке"}</p></div>{!document.uploaded && <button aria-label="Удалить файл" onClick={() => setDocuments((current) => current.filter((item) => item.id !== document.id))}><Trash2 size={16} /></button>}</div>)}
+                {documents.map((document) => <div key={document.id} className="flex items-center gap-3 rounded-xl bg-white/[.03] p-3"><div className="min-w-0 flex-1"><p className="truncate text-sm">{document.file.name}</p><p className="text-xs text-mist">{document.category} · {document.uploaded ? "загружен и поставлен в очередь" : "готов к загрузке"}</p></div>{!document.uploaded && <button aria-label="Удалить файл" onClick={() => setDocuments((current) => current.filter((item) => item.id !== document.id))}><Trash2 size={16} /></button>}</div>)}
               </div>
               <p className="mt-4 text-xs text-mist">Подготовлено: {documents.length} · Загружено: {uploadedCount}</p>
             </div>
@@ -317,6 +339,7 @@ export function TelegramProjectWorkspace() {
             <button disabled={busy} onClick={() => void saveProject()} className="secondary-cta justify-center"><Save size={15} /> Сохранить и загрузить</button>
             <button disabled={busy} onClick={() => void runCheck()} className="primary-cta justify-center">Провести полный анализ <ArrowRight size={15} /></button>
           </div>
+          {draft.id && <ProjectFactReview projectId={draft.id} onFactsChanged={() => setReport(null)} />}
           {report && <GovernmentOpportunityReport report={report} />}
         </section>
       </div>
