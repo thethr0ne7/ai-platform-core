@@ -1,5 +1,5 @@
-import { redirect } from 'next/navigation'
+import { TelegramProjectWorkspace } from '@/components/telegram-project-workspace'
 
 export default function HomePage() {
-  redirect('/control-center')
+  return <TelegramProjectWorkspace />
 }
