@@ -100,6 +100,40 @@ test("VER436SIA merge creates provenance-aware canonical intelligence", () => {
   assert.ok(bundle.forecasts.every((forecast) => forecast.canSupportEligibility === false));
 });
 
+test("Canonical claims cannot support eligibility from partial evidence", () => {
+  const report = reportWithMeasure({
+    eligibility_status: "match",
+    verdict_level: "candidate",
+    evidence_scope: {
+      fully_verified: false,
+      required_rules: 2,
+      verified_rules: 1,
+    },
+    requirement_matrix: [
+      {
+        requirement_key: "applicant_type",
+        label: "Допустимая форма заявителя",
+        status: "matched",
+        evidence_status: "verified",
+        evidence_id: "33333333-3333-4333-8333-333333333333",
+      },
+      {
+        requirement_key: "territory",
+        label: "Территория применения",
+        status: "manual_review",
+        evidence_status: "manual_review",
+      },
+    ],
+  });
+  const preTruth = analyzePreTruthIntelligence({ projectId, report });
+  const bundle = finalizeGovernmentIntelligence({ projectId, finalReport: report, preTruth });
+  const claim = bundle.claims[0];
+
+  assert.ok(claim);
+  assert.equal(claim.truthStatus, "manual_review");
+  assert.equal(claim.canSupportEligibility, false);
+});
+
 test("Decision Cards remain manual review when Truth Gate is not passed", () => {
   const report = reportWithMeasure();
   const preTruth = analyzePreTruthIntelligence({ projectId, report });
@@ -111,6 +145,37 @@ test("Decision Cards remain manual review when Truth Gate is not passed", () => 
   assert.equal(card.publishStatus, "manual_review");
   assert.equal(card.eligibilityStatus, "mismatch");
   assert.notEqual(card.truthStatus, "verified");
+});
+
+test("A verified quote without an evidence record cannot publish a Decision Card", () => {
+  const report = reportWithMeasure({
+    eligibility_status: "match",
+    verdict_level: "verified_match",
+    blockers: [],
+    missing_data: [],
+    evidence_scope: {
+      fully_verified: true,
+      required_rules: 1,
+      verified_rules: 1,
+    },
+    requirement_matrix: [
+      {
+        requirement_key: "applicant_type",
+        label: "Допустимая форма заявителя",
+        status: "matched",
+        evidence_status: "verified",
+        source_quote: "Получателями являются крестьянские фермерские хозяйства.",
+      },
+    ],
+  });
+  const preTruth = analyzePreTruthIntelligence({ projectId, report });
+  const bundle = finalizeGovernmentIntelligence({ projectId, finalReport: report, preTruth });
+  const card = bundle.decisionCards[0];
+
+  assert.ok(card);
+  assert.equal(card.verifiedEvidenceCount, 0);
+  assert.equal(card.truthGatePassed, false);
+  assert.equal(card.publishStatus, "manual_review");
 });
 
 test("A Decision Card is publishable only with verified requirements and evidence", () => {
@@ -146,11 +211,15 @@ test("A Decision Card is publishable only with verified requirements and evidenc
   const preTruth = analyzePreTruthIntelligence({ projectId, report });
   const bundle = finalizeGovernmentIntelligence({ projectId, finalReport: report, preTruth });
   const card = bundle.decisionCards[0];
+  const claim = bundle.claims[0];
 
   assert.ok(card);
+  assert.ok(claim);
   assert.equal(card.truthGatePassed, true);
   assert.equal(card.publishStatus, "published");
   assert.equal(card.verifiedRequirementCount, 2);
   assert.equal(card.verifiedEvidenceCount, 2);
   assert.equal(card.truthStatus, "verified");
+  assert.equal(claim.truthStatus, "verified");
+  assert.equal(claim.canSupportEligibility, true);
 });
