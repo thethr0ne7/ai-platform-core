@@ -105,14 +105,7 @@ Deno.serve(async (req) => {
     });
     if (eligibility.error) throw eligibility.error;
 
-    const directions = await db.rpc("gi_enrich_measure_matches_with_directions", {
-      p_project_id: projectId,
-      p_telegram_user_id: telegramUserId,
-      p_matches: eligibility.data ?? [],
-    });
-    if (directions.error) throw directions.error;
-
-    const deterministicMatches = Array.isArray(directions.data) ? directions.data : [];
+    const deterministicMatches = Array.isArray(eligibility.data) ? eligibility.data : [];
     const bestMatchScore = deterministicMatches.reduce(
       (best: number, item: Record<string, unknown>) => Math.max(best, Number(item.score ?? 0)),
       0,
@@ -148,7 +141,6 @@ Deno.serve(async (req) => {
         source_health_engine: "official-source-ingestion-v0.59",
         truth_gate_engine: "measure-scoped-truth-gate-v0.64",
         eligibility_engine: "deterministic-eligibility-v0.70",
-        measure_direction_engine: "order-187-direction-matcher-v0.75",
         report_finalizer: "project-report-finalizer-v0.63",
         persistence_engine: "final-report-persistence-v0.71",
         intelligence_engine: "ver436sia-intelligence-v0.72",
