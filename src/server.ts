@@ -88,114 +88,117 @@ function hasValidApiKey(request: IncomingMessage): boolean {
 function audit(request: IncomingMessage, status: number, startedAt: number): void {
   console.log(JSON.stringify({
     level: status >= 500 ? "error" : status >= 400 ? "warn" : "info",
-    event: "platform_http_request",
+    event: "http_request",
     method: request.method,
     path: request.url,
     status,
-    durationMs: Date.now() - startedAt,
-    remoteAddress: requestKey(request),
-    occurredAt: new Date().toISOString()
+    durationMs: Date.now() - startedAt
   }));
 }
 
 const server = createServer(async (request, response) => {
   const startedAt = Date.now();
-  let status = 500;
+  const url = new URL(request.url ?? "/", "http://localhost");
+  let status = 200;
 
   try {
-    if (request.method === "GET" && request.url === "/health") {
-      status = 200;
-      send(response, status, {
-        status: "ok",
-        version: platformVersion,
-        products: products.map((product) => product.id),
-        capabilities: capabilities.map((capability) => capability.id)
-      });
+    if (!withinRateLimit(request)) {
+      status = 429;
+      send(response, status, { error: { code: "RATE_LIMITED", message: "Too many requests" } });
       return;
     }
 
-    if (request.method === "GET" && request.url === "/ready") {
-      const ready = products.length > 0 && listActions().length > 0 && Boolean(platformApiKey);
-      status = ready ? 200 : 503;
+    if (request.method === "GET" && url.pathname === "/health/live") {
+      send(response, 200, { status: "ok", service: "ai-platform-core", version: platformVersion });
+      return;
+    }
+
+    if (request.method === "GET" && url.pathname === "/health/ready") {
+      const registryReady = products.length > 0 && listActions().length > 0;
+      const executionConfigured = platformApiKey.length > 0;
+      status = registryReady && executionConfigured ? 200 : 503;
       send(response, status, {
-        status: ready ? "ready" : "not_ready",
+        status: status === 200 ? "ready" : "not-ready",
         version: platformVersion,
         checks: {
-          productsRegistered: products.length > 0,
-          actionsRegistered: listActions().length > 0,
-          executionAuthenticationConfigured: Boolean(platformApiKey)
-        }
+          registry: registryReady ? "ready" : "not-ready",
+          execution_auth: executionConfigured ? "ready" : "not-configured"
+        },
+        products: products.length,
+        actions: listActions().length
       });
       return;
     }
 
-    if (request.method === "GET" && request.url === "/v1/actions") {
-      status = 200;
-      send(response, status, { actions: listActions() });
+    if (request.method === "GET" && url.pathname === "/v1/products") {
+      send(response, 200, { products });
       return;
     }
 
-    if (request.method === "POST" && request.url === "/v1/execute") {
-      if (!withinRateLimit(request)) {
-        status = 429;
-        send(response, status, { error: "rate_limit_exceeded" });
+    if (request.method === "GET" && url.pathname === "/v1/capabilities") {
+      send(response, 200, { capabilities });
+      return;
+    }
+
+    if (request.method === "GET" && url.pathname === "/v1/actions") {
+      send(response, 200, { actions: listActions() });
+      return;
+    }
+
+    if (request.method === "POST" && url.pathname === "/v1/execute") {
+      if (!platformApiKey) {
+        status = 503;
+        send(response, status, { ok: false, error: { code: "EXECUTION_DISABLED", message: "PLATFORM_API_KEY is not configured" } });
         return;
       }
       if (!hasValidApiKey(request)) {
         status = 401;
-        send(response, status, { error: "unauthorized" });
+        send(response, status, { ok: false, error: { code: "UNAUTHORIZED", message: "Invalid API key" } });
         return;
       }
 
       const body = await readJson(request);
       if (!isExecutionRequest(body)) {
         status = 400;
-        send(response, status, { error: "invalid_execution_request" });
+        send(response, status, { ok: false, error: { code: "INVALID_REQUEST", message: "Invalid execution request" } });
         return;
       }
 
-      const result = await orchestrate({
-        requestId: body.requestId,
-        productId: body.productId,
-        action: body.action,
-        payload: body.payload
-      });
-      status = result.status === "completed" ? 200 : result.status === "denied" ? 403 : 400;
+      const result = await orchestrate(body);
+      status = result.ok ? 200 : 422;
       send(response, status, result);
       return;
     }
 
     status = 404;
-    send(response, status, { error: "not_found" });
+    send(response, status, { error: { code: "NOT_FOUND", message: "Not found" } });
   } catch (error) {
-    status = 500;
+    status = 400;
     send(response, status, {
-      error: "internal_error",
-      message: error instanceof Error ? error.message : "Unknown error"
+      ok: false,
+      error: {
+        code: "INVALID_REQUEST",
+        message: error instanceof Error ? error.message : "Invalid request"
+      }
     });
   } finally {
     audit(request, status, startedAt);
   }
 });
 
-server.listen(port, () => {
-  console.log(JSON.stringify({
-    level: "info",
-    event: "platform_server_started",
-    port,
-    version: platformVersion,
-    executionEnabled: Boolean(platformApiKey),
-    occurredAt: new Date().toISOString()
-  }));
-});
-
 function shutdown(signal: string): void {
-  console.log(JSON.stringify({ level: "info", event: "platform_server_shutdown", signal }));
+  console.log(JSON.stringify({ level: "info", event: "shutdown", signal }));
   server.close((error) => {
-    process.exit(error ? 1 : 0);
+    if (error) {
+      console.error(JSON.stringify({ level: "error", event: "shutdown_failed", message: error.message }));
+      process.exitCode = 1;
+    }
   });
-  setTimeout(() => process.exit(1), 10_000).unref();
 }
 
-process.on("SIGTERM", () => shutdown("SIGTERM"));
-process.on("SIGINT", () => shutdown("SIGINT"));
+process.once("SIGTERM", () => shutdown("SIGTERM"));
+process.once("SIGINT", () => shutdown("SIGINT"));
+
+server.listen(port, () => {
+  console.log(JSON.stringify({ level: "info", event: "server_started", port, version: platformVersion }));
+});
