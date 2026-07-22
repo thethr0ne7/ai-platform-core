@@ -1,22 +1,50 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  analyzePreTruthIntelligence,
+  finalizeGovernmentIntelligence,
+} from "../_shared/intelligence/index.ts";
 
-const cors = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+const DEFAULT_ALLOWED_ORIGINS = new Set([
+  "https://ai-platform-core.vercel.app",
+  "https://ai-platform-core-63-gginner.vercel.app",
+  "https://web.telegram.org",
+]);
 
-function jsonResponse(payload: unknown, status = 200) {
+function allowedOrigins(): Set<string> {
+  const configured = (Deno.env.get("ALLOWED_ORIGINS") ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  return new Set([...DEFAULT_ALLOWED_ORIGINS, ...configured]);
+}
+
+function corsHeaders(req: Request): Record<string, string> {
+  const origin = req.headers.get("origin");
+  const headers: Record<string, string> = {
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Max-Age": "86400",
+    Vary: "Origin",
+  };
+  if (origin && allowedOrigins().has(origin)) headers["Access-Control-Allow-Origin"] = origin;
+  return headers;
+}
+
+function jsonResponse(req: Request, payload: unknown, status = 200) {
   return new Response(JSON.stringify(payload), {
     status,
-    headers: { ...cors, "Content-Type": "application/json", "Cache-Control": "no-store" },
+    headers: { ...corsHeaders(req), "Content-Type": "application/json", "Cache-Control": "no-store" },
   });
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
-  if (req.method !== "POST") return jsonResponse({ error: "Метод не поддерживается" }, 405);
+  const origin = req.headers.get("origin");
+  if (origin && !allowedOrigins().has(origin)) {
+    return jsonResponse(req, { error: "Источник запроса не разрешён" }, 403);
+  }
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders(req) });
+  if (req.method !== "POST") return jsonResponse(req, { error: "Метод не поддерживается" }, 405);
 
   try {
     const body = await req.json();
@@ -49,12 +77,6 @@ Deno.serve(async (req) => {
     if (baseReport.error) throw baseReport.error;
 
     const checkId = typeof baseReport.data?.check_id === "string" ? baseReport.data.check_id : null;
-    const eligibility = await db.rpc("gi_evaluate_project_measures", {
-      p_project_id: projectId,
-      p_telegram_user_id: telegramUserId,
-      p_check_id: checkId,
-    });
-    if (eligibility.error) throw eligibility.error;
 
     const enrichedReport = await db.rpc("gi_enrich_project_report", {
       p_project_id: projectId,
@@ -63,12 +85,31 @@ Deno.serve(async (req) => {
     });
     if (enrichedReport.error) throw enrichedReport.error;
 
+    const sourceCatalog = await db.rpc("gi_get_source_catalog_for_report");
+    if (sourceCatalog.error) throw sourceCatalog.error;
+
+    const enrichedData = (enrichedReport.data ?? {}) as Record<string, unknown>;
+    const preTruthIntelligence = analyzePreTruthIntelligence({
+      projectId,
+      ...(checkId ? { projectCheckId: checkId } : {}),
+      report: {
+        ...enrichedData,
+        sources: sourceCatalog.data ?? [],
+      },
+    });
+
+    const eligibility = await db.rpc("gi_evaluate_project_measures", {
+      p_project_id: projectId,
+      p_telegram_user_id: telegramUserId,
+      p_check_id: checkId,
+    });
+    if (eligibility.error) throw eligibility.error;
+
     const deterministicMatches = Array.isArray(eligibility.data) ? eligibility.data : [];
     const bestMatchScore = deterministicMatches.reduce(
       (best: number, item: Record<string, unknown>) => Math.max(best, Number(item.score ?? 0)),
       0,
     );
-    const enrichedData = (enrichedReport.data ?? {}) as Record<string, unknown>;
     const reportForTruth = {
       ...enrichedData,
       measure_matches: deterministicMatches,
@@ -91,11 +132,8 @@ Deno.serve(async (req) => {
     });
     if (finalizedReport.error) throw finalizedReport.error;
 
-    const sourceCatalog = await db.rpc("gi_get_source_catalog_for_report");
-    if (sourceCatalog.error) throw sourceCatalog.error;
-
     const finalData = finalizedReport.data as Record<string, unknown>;
-    const report = {
+    const coreReport = {
       ...finalData,
       sources: sourceCatalog.data ?? [],
       metadata: {
@@ -105,7 +143,59 @@ Deno.serve(async (req) => {
         eligibility_engine: "deterministic-eligibility-v0.70",
         report_finalizer: "project-report-finalizer-v0.63",
         persistence_engine: "final-report-persistence-v0.71",
+        intelligence_engine: "ver436sia-intelligence-v0.72",
         source_catalog_generated_at: new Date().toISOString(),
+      },
+    };
+
+    let intelligenceStatus: Record<string, unknown>;
+    try {
+      const intelligenceBundle = finalizeGovernmentIntelligence({
+        projectId,
+        ...(checkId ? { projectCheckId: checkId } : {}),
+        finalReport: coreReport,
+        preTruth: preTruthIntelligence,
+      });
+      const persistedIntelligence = await db.rpc("gi_persist_intelligence_bundle", {
+        p_project_id: projectId,
+        p_telegram_user_id: telegramUserId,
+        p_check_id: checkId,
+        p_bundle: intelligenceBundle,
+      });
+      if (persistedIntelligence.error) throw persistedIntelligence.error;
+
+      intelligenceStatus = {
+        status: persistedIntelligence.data?.status ?? "manual_review",
+        run_id: persistedIntelligence.data?.run_id ?? null,
+        engine_version: intelligenceBundle.engineVersion,
+        epistemic_contract: {
+          signal_is_fact: false,
+          trend_is_requirement: false,
+          forecast_is_eligibility: false,
+          narrative_is_legal_basis: false,
+        },
+        summary: intelligenceBundle.summary,
+        decision_cards: intelligenceBundle.decisionCards,
+        trajectories: intelligenceBundle.trajectories,
+        narratives: intelligenceBundle.narratives,
+        forecasts: intelligenceBundle.forecasts,
+      };
+    } catch (intelligenceError) {
+      console.error("government_intelligence_failed", intelligenceError);
+      intelligenceStatus = {
+        status: "failed",
+        engine_version: "ver436sia-intelligence-v0.72",
+        error: intelligenceError instanceof Error ? intelligenceError.message : "Ошибка аналитического контура",
+        publishable_decision_cards: 0,
+      };
+    }
+
+    const report = {
+      ...coreReport,
+      government_intelligence: intelligenceStatus,
+      metadata: {
+        ...coreReport.metadata,
+        intelligence_status: intelligenceStatus.status,
       },
     };
 
@@ -118,9 +208,10 @@ Deno.serve(async (req) => {
       if (persisted.error) throw persisted.error;
     }
 
-    return jsonResponse({ report });
+    return jsonResponse(req, { report });
   } catch (error) {
     return jsonResponse(
+      req,
       { error: error instanceof Error ? error.message : "Ошибка анализа" },
       400,
     );

@@ -1,6 +1,6 @@
 {
   "name": "@thr0ne7/schemas",
-  "version": "0.50.0",
+  "version": "0.72.0",
   "private": true,
   "type": "module",
   "exports": {
