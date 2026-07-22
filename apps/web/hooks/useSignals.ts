@@ -22,18 +22,14 @@ export function useSignals(): SignalsState {
     let active = true
 
     async function load() {
-      const { data, error } = await supabase
-        .from('gi_analytic_signals')
-        .select('*')
-        .order('confidence', { ascending: false })
-        .limit(20)
+      const { data, error } = await supabase.rpc('get_analytic_signals', { p_limit: 20 })
 
       if (!active) return
 
       setState({
-        data: (data ?? []) as Signal[],
+        data: error ? [] : ((data ?? []) as Signal[]),
         loading: false,
-        error: error?.message ?? null,
+        error: error ? 'Не удалось получить новые изменения и сигналы.' : null,
       })
     }
 
