@@ -6,7 +6,7 @@ import { listActions } from "./actions.js";
 
 const port = Number(process.env.PORT ?? 3000);
 const maxBodyBytes = 1_000_000;
-const platformVersion = process.env.PLATFORM_VERSION ?? "0.50.0";
+const platformVersion = process.env.PLATFORM_VERSION ?? "0.72.0";
 const platformApiKey = process.env.PLATFORM_API_KEY?.trim() ?? "";
 const rateLimitWindowMs = 60_000;
 const rateLimitMaxRequests = 60;
