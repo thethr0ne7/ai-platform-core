@@ -79,7 +79,7 @@ Deno.serve(async (req) => {
       },
     };
 
-    const truthReport = await db.rpc("gi_apply_truth_gate", {
+    const truthReport = await db.rpc("gi_apply_measure_scoped_truth_gate", {
       p_report: reportForTruth,
     });
     if (truthReport.error) throw truthReport.error;
@@ -101,7 +101,7 @@ Deno.serve(async (req) => {
       metadata: {
         ...((finalData?.metadata as Record<string, unknown>) ?? {}),
         source_health_engine: "official-source-ingestion-v0.59",
-        truth_gate_engine: "truth-gate-v0.60",
+        truth_gate_engine: "measure-scoped-truth-gate-v0.64",
         eligibility_engine: "deterministic-eligibility-v0.62",
         report_finalizer: "project-report-finalizer-v0.63",
         source_catalog_generated_at: new Date().toISOString(),
