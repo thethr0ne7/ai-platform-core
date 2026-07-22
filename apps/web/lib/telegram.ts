@@ -135,7 +135,36 @@ export async function callTelegramApi<T>(action: string, payload: Record<string,
 }
 
 export async function callGovernmentOpportunityApi<T>(projectId: string): Promise<T> {
-  return invokeTelegramFunction<T>("government-opportunity-api", { projectId });
+  const base = await invokeTelegramFunction<{ report?: Record<string, unknown> } & Record<string, unknown>>(
+    "government-opportunity-api",
+    { projectId },
+  );
+
+  if (!base.report) return base as T;
+
+  try {
+    const enriched = await invokeTelegramFunction<{ report: Record<string, unknown> }>(
+      "measure-direction-enrichment",
+      { projectId },
+    );
+    return { ...base, report: enriched.report } as T;
+  } catch (error) {
+    console.warn("measure_direction_enrichment_unavailable", error);
+    const metadata = base.report.metadata && typeof base.report.metadata === "object"
+      ? base.report.metadata as Record<string, unknown>
+      : {};
+    return {
+      ...base,
+      report: {
+        ...base.report,
+        metadata: {
+          ...metadata,
+          measure_direction_status: "unavailable",
+          measure_direction_legal_effect: "relevance_hint_only",
+        },
+      },
+    } as T;
+  }
 }
 
 export async function requestDocumentProcessing(documentId: string) {
