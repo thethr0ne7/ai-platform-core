@@ -10,7 +10,6 @@ type QueueTask = {
   task_type: string;
   target_url: string | null;
   source_document_id: string | null;
-  status: string;
   gi_source_documents: {
     id: string;
     source_key: string;
@@ -40,7 +39,7 @@ const db = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 const RELAY_URL = "https://ai-platform-core.vercel.app/api/source-relay";
-const USER_AGENT = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 Version/18.5 Mobile Safari/604.1 EvidenceFoundation/0.66";
+const USER_AGENT = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 Version/18.5 Mobile Safari/604.1 EvidenceFoundation/0.67";
 const MAX_BYTES = 2_500_000;
 const MAX_TEXT = 3_000_000;
 const MAX_PAGES = 180;
@@ -78,8 +77,8 @@ Deno.serve(async (request: Request) => {
 async function processQueue(token: string, limit: number) {
   const { data, error } = await db
     .from("gi_evidence_verification_queue")
-    .select("id,task_type,target_url,source_document_id,status,gi_source_documents(id,source_key,canonical_url,title,authority,document_number,published_at,evidence_tier)")
-    .in("status", ["pending", "blocked"])
+    .select("id,task_type,target_url,source_document_id,gi_source_documents(id,source_key,canonical_url,title,authority,document_number,published_at,evidence_tier)")
+    .eq("status", "pending")
     .in("task_type", ["source_link", "edition_check"])
     .not("source_document_id", "is", null)
     .order("priority", { ascending: true })
@@ -103,7 +102,7 @@ async function processTask(token: string, task: QueueTask) {
     .from("gi_evidence_verification_queue")
     .update({ status: "in_progress", updated_at: claimedAt })
     .eq("id", task.id)
-    .in("status", ["pending", "blocked"])
+    .eq("status", "pending")
     .select("id")
     .maybeSingle();
   if (claimError) throw claimError;
@@ -118,11 +117,12 @@ async function processTask(token: string, task: QueueTask) {
     let extractionUrl = landing.finalUrl;
     let acquisition = landing.acquisition ?? "direct";
     let pages: Array<{ locator: string; text: string }> = [];
-    let extractionMethod = "evidence-html-v066";
+    let extractionMethod = "evidence-html-v067";
+    let pdfDetected = contentType.includes("pdf") || hasPdfSignature(bytes);
 
-    if (contentType.includes("pdf") || hasPdfSignature(bytes)) {
+    if (pdfDetected) {
       pages = await parsePdf(bytes);
-      extractionMethod = "evidence-unpdf-v066";
+      extractionMethod = "evidence-unpdf-v067";
     } else {
       const html = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
       const pdfUrl = discoverPdfUrl(landing.finalUrl, html);
@@ -133,13 +133,14 @@ async function processTask(token: string, task: QueueTask) {
           contentType = pdf.contentType.toLowerCase();
           extractionUrl = pdf.finalUrl;
           acquisition = pdf.acquisition ?? acquisition;
-          if (contentType.includes("pdf") || hasPdfSignature(bytes)) {
+          pdfDetected = contentType.includes("pdf") || hasPdfSignature(bytes);
+          if (pdfDetected) {
             pages = await parsePdf(bytes);
-            extractionMethod = "evidence-unpdf-v066";
+            extractionMethod = "evidence-unpdf-v067";
           }
         }
       }
-      if (!pages.length) {
+      if (!pages.length && !pdfDetected) {
         const text = htmlToText(html).slice(0, MAX_TEXT);
         if (text.length < 80) throw new Error("source_text_too_short");
         pages = [{ locator: "body", text }];
@@ -151,6 +152,27 @@ async function processTask(token: string, task: QueueTask) {
       .map((page) => ({ ...page, text: normalizeText(page.text) }))
       .filter((page) => page.text.length >= 20);
     const combinedText = normalizedPages.map((page) => page.text).join("\n\n").slice(0, MAX_TEXT);
+
+    if (!combinedText && pdfDetected) {
+      const result = {
+        capture_status: "needs_ocr",
+        document_id: document.id,
+        canonical_official_url: document.canonical_url,
+        acquisition_url: task.target_url,
+        extraction_url: extractionUrl,
+        acquisition,
+        content_type: contentType,
+        byte_size: bytes.byteLength,
+        human_verification_required: true,
+      };
+      await db.from("gi_evidence_verification_queue").update({
+        status: "in_progress",
+        result,
+        notes: "PDF получен, но машинный текст отсутствует. Документ направлен в OCR-контур; юридические требования остаются неподтверждёнными.",
+        updated_at: new Date().toISOString(),
+      }).eq("id", task.id);
+      return { taskId: task.id, status: "needs_ocr", ...result };
+    }
     if (!combinedText) throw new Error("no_machine_readable_text");
 
     const contentHash = await sha256Text(combinedText);
@@ -173,7 +195,7 @@ async function processTask(token: string, task: QueueTask) {
         extraction_method: extractionMethod,
         citations,
         metadata: {
-          evidence_capture_engine: "evidence-source-processor-v0.66",
+          evidence_capture_engine: "evidence-source-processor-v0.67",
           evidence_tier: document.evidence_tier,
           canonical_official_url: document.canonical_url,
           acquisition_url: task.target_url,
@@ -234,14 +256,10 @@ async function processTask(token: string, task: QueueTask) {
 async function fetchSource(token: string, url: string): Promise<FetchResponse> {
   const direct = await directFetch(url);
   if (direct.ok && direct.bodyBase64) return direct;
-
   try {
     const response = await fetch(RELAY_URL, {
       method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-source-relay-token": token,
-      },
+      headers: { "content-type": "application/json", "x-source-relay-token": token },
       body: JSON.stringify({ url }),
     });
     const payload = await response.json() as FetchResponse;
@@ -345,9 +363,7 @@ function discoverPdfUrl(baseUrl: string, html: string): string | null {
     try {
       const value = decodeHtml(match[1].replace(/\\\//g, "/"));
       const url = new URL(value, baseUrl);
-      if (url.protocol === "https:" && (url.pathname.toLowerCase().endsWith(".pdf") || /pdf/i.test(url.search))) {
-        return url.toString();
-      }
+      if (url.protocol === "https:" && (url.pathname.toLowerCase().endsWith(".pdf") || /pdf/i.test(url.search))) return url.toString();
     } catch {
       // Ignore malformed document links.
     }
