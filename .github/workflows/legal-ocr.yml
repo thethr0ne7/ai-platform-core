@@ -1,0 +1,80 @@
+name: Legal OCR
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/legal-ocr.yml'
+      - 'services/legal-ocr-worker/**'
+      - 'supabase/functions/legal-ocr-broker/**'
+      - 'supabase/migrations/*legal_ocr*'
+  schedule:
+    - cron: '7,22,37,52 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: legal-ocr-${{ github.event_name }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate legal OCR worker
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Compile worker
+        run: python -m py_compile services/legal-ocr-worker/worker.py
+
+  process:
+    name: Process legal OCR queue
+    if: github.event_name != 'pull_request'
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      LEGAL_OCR_BROKER_URL: https://hgivyjjethjwswjrvroy.supabase.co/functions/v1/legal-ocr-broker
+      LEGAL_OCR_MAX_JOBS: '2'
+      PYTHONUNBUFFERED: '1'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: services/legal-ocr-worker/requirements.txt
+
+      - name: Install OCR system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            ghostscript \
+            poppler-utils \
+            qpdf \
+            tesseract-ocr \
+            tesseract-ocr-eng \
+            tesseract-ocr-rus \
+            unpaper
+
+      - name: Install Python dependencies
+        run: python -m pip install --disable-pip-version-check -r services/legal-ocr-worker/requirements.txt
+
+      - name: Validate worker
+        run: python -m compileall -q services/legal-ocr-worker
+
+      - name: Process queue
+        run: python services/legal-ocr-worker/worker.py
