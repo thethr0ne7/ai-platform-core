@@ -23,14 +23,19 @@ export function buildCanonicalClaims(context: IntelligenceContext): RuntimeClaim
   for (const measure of asRecords(report.measure_matches)) {
     const authorityNames = text(measure.authority).split(/\s*\/\s*|\s*;\s*/).filter(Boolean);
     const requirements = asRecords(measure.requirement_matrix);
+    const evidenceScope = asRecord(measure.evidence_scope);
     const evidenceIds = Array.from(new Set(requirements.flatMap((requirement) => {
       const actual = asRecord(requirement.actual);
       return [text(requirement.evidence_id), text(actual.evidence_id)].filter(Boolean);
     })));
-    const verifiedRequirements = requirements.filter((requirement) =>
-      text(requirement.status) === "matched" && text(requirement.evidence_status) === "verified"
-    );
-    const truthStatus = verifiedRequirements.length > 0 && evidenceIds.length > 0 ? "verified" : "manual_review";
+    const fullyVerifiedMatch =
+      text(measure.eligibility_status) === "match" &&
+      text(measure.verdict_level) === "verified_match" &&
+      evidenceScope.fully_verified === true &&
+      Number(evidenceScope.required_rules ?? 0) > 0 &&
+      Number(evidenceScope.verified_rules ?? 0) === Number(evidenceScope.required_rules ?? 0) &&
+      evidenceIds.length > 0;
+    const truthStatus = fullyVerifiedMatch ? "verified" : "manual_review";
     const measureRegion = text(measure.measure_region) || projectRegion;
     const territoryNames = measureRegion.split(/\s*;\s*/).filter(Boolean);
     const applicantRequirement = requirements.find((item) => text(item.type) === "applicant_type");
@@ -75,12 +80,14 @@ export function buildCanonicalClaims(context: IntelligenceContext): RuntimeClaim
         territory: territoryNames,
         effectiveDates,
         eligibilityStatus: text(measure.eligibility_status),
+        verdictLevel: text(measure.verdict_level),
+        evidenceScope,
       },
       confidence: boundedConfidence(measure.confidence, 0.6),
       epistemicStatus: "observed",
       truthStatus,
       engineVersion: ENGINE_VERSION,
-      canSupportEligibility: truthStatus === "verified" && evidenceIds.length > 0,
+      canSupportEligibility: fullyVerifiedMatch,
     });
   }
 
