@@ -63,24 +63,47 @@ Deno.serve(async (req) => {
     });
     if (enrichedReport.error) throw enrichedReport.error;
 
+    const deterministicMatches = Array.isArray(eligibility.data) ? eligibility.data : [];
+    const bestMatchScore = deterministicMatches.reduce(
+      (best: number, item: Record<string, unknown>) => Math.max(best, Number(item.score ?? 0)),
+      0,
+    );
+    const enrichedData = (enrichedReport.data ?? {}) as Record<string, unknown>;
+    const reportForTruth = {
+      ...enrichedData,
+      measure_matches: deterministicMatches,
+      readiness: {
+        ...((enrichedData.readiness as Record<string, unknown> | undefined) ?? {}),
+        matches_total: deterministicMatches.length,
+        best_match_score: bestMatchScore,
+      },
+    };
+
     const truthReport = await db.rpc("gi_apply_truth_gate", {
-      p_report: enrichedReport.data,
+      p_report: reportForTruth,
     });
     if (truthReport.error) throw truthReport.error;
+
+    const finalizedReport = await db.rpc("gi_finalize_project_report", {
+      p_project_id: projectId,
+      p_telegram_user_id: telegramUserId,
+      p_report: truthReport.data,
+    });
+    if (finalizedReport.error) throw finalizedReport.error;
 
     const sourceCatalog = await db.rpc("gi_get_source_catalog_for_report");
     if (sourceCatalog.error) throw sourceCatalog.error;
 
-    const truthData = truthReport.data as Record<string, unknown>;
+    const finalData = finalizedReport.data as Record<string, unknown>;
     const report = {
-      ...truthData,
-      measure_matches: eligibility.data ?? truthData.measure_matches ?? [],
+      ...finalData,
       sources: sourceCatalog.data ?? [],
       metadata: {
-        ...((truthData?.metadata as Record<string, unknown>) ?? {}),
+        ...((finalData?.metadata as Record<string, unknown>) ?? {}),
         source_health_engine: "official-source-ingestion-v0.59",
         truth_gate_engine: "truth-gate-v0.60",
         eligibility_engine: "deterministic-eligibility-v0.62",
+        report_finalizer: "project-report-finalizer-v0.63",
         source_catalog_generated_at: new Date().toISOString(),
       },
     };
