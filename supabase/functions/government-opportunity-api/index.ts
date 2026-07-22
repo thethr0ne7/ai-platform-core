@@ -48,6 +48,14 @@ Deno.serve(async (req) => {
     });
     if (baseReport.error) throw baseReport.error;
 
+    const checkId = typeof baseReport.data?.check_id === "string" ? baseReport.data.check_id : null;
+    const eligibility = await db.rpc("gi_evaluate_project_measures", {
+      p_project_id: projectId,
+      p_telegram_user_id: telegramUserId,
+      p_check_id: checkId,
+    });
+    if (eligibility.error) throw eligibility.error;
+
     const enrichedReport = await db.rpc("gi_enrich_project_report", {
       p_project_id: projectId,
       p_telegram_user_id: telegramUserId,
@@ -66,11 +74,13 @@ Deno.serve(async (req) => {
     const truthData = truthReport.data as Record<string, unknown>;
     const report = {
       ...truthData,
+      measure_matches: eligibility.data ?? truthData.measure_matches ?? [],
       sources: sourceCatalog.data ?? [],
       metadata: {
         ...((truthData?.metadata as Record<string, unknown>) ?? {}),
         source_health_engine: "official-source-ingestion-v0.59",
         truth_gate_engine: "truth-gate-v0.60",
+        eligibility_engine: "deterministic-eligibility-v0.62",
         source_catalog_generated_at: new Date().toISOString(),
       },
     };
