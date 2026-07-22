@@ -1,13 +1,14 @@
 {
   "platform": "AI Platform Core",
-  "version": "0.73.0",
-  "codename": "Product Workspace UI",
+  "version": "0.74.0",
+  "codename": "Verified Catalogue Foundation",
   "components": {
     "core": "0.72.0",
-    "web": "0.73.0",
-    "schemas": "0.72.0",
+    "web": "0.74.0",
+    "schemas": "0.74.0",
     "runtime": "0.72.0",
-    "governmentIntelligence": "0.72.0"
+    "governmentIntelligence": "0.72.0",
+    "evidenceReview": "0.74.0"
   },
   "architecture": {
     "layers": [
@@ -19,12 +20,14 @@
       "learning",
       "platform"
     ],
-    "verticalSlice": "project profile + documents -> parsing -> facts -> evidence -> eligibility -> truth gate -> decision cards -> application route -> controlled forecast",
+    "verticalSlice": "project profile + documents -> parsing -> facts -> evidence -> expert review -> eligibility -> truth gate -> decision cards -> application route -> controlled forecast",
     "epistemicContract": [
       "signal-is-not-fact",
       "trend-is-not-requirement",
       "forecast-is-not-eligibility",
-      "narrative-is-not-legal-basis"
+      "narrative-is-not-legal-basis",
+      "quote-must-exist-in-saved-source-version",
+      "verified-requirement-requires-tier-a-evidence"
     ]
   },
   "productExperience": {
@@ -32,6 +35,14 @@
       "project-profile",
       "documents-and-facts",
       "verified-result-and-route"
+    ],
+    "expertJourney": [
+      "telegram-authenticated-reviewer",
+      "evidence-queue",
+      "saved-source-version",
+      "exact-quote-and-locator",
+      "atomic-audit-record",
+      "truth-gate"
     ],
     "mobileFirst": true,
     "language": "ru",
@@ -47,6 +58,10 @@
     "no-secrets-in-repository",
     "replay-validation",
     "evidence-provenance",
+    "tier-a-source-owner",
+    "exact-quote-match",
+    "evidence-review-audit",
+    "verified-requirement-link",
     "truth-gated-decision-cards",
     "controlled-forecasting",
     "mobile-overflow",
@@ -60,7 +75,8 @@
     "intelligenceStore": "Supabase PostgreSQL",
     "surfaces": [
       "web",
-      "telegram-mini-app"
+      "telegram-mini-app",
+      "evidence-review-workspace"
     ]
   },
   "legacy": {
