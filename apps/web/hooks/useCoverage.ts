@@ -22,19 +22,14 @@ export function useCoverage(): CoverageState {
     let active = true
 
     async function load() {
-      const { data, error } = await supabase
-        .from('coverage_snapshots')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
+      const { data, error } = await supabase.rpc('get_coverage_snapshot')
 
       if (!active) return
 
       setState({
-        data: (data as CoverageSnapshot | null) ?? null,
+        data: error ? null : ((data as CoverageSnapshot | null) ?? null),
         loading: false,
-        error: error?.message ?? null,
+        error: error ? 'Не удалось получить данные о заполнении базы.' : null,
       })
     }
 
