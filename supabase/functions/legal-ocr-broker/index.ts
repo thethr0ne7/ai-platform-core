@@ -124,7 +124,7 @@ async function authenticate(request: Request): Promise<GitHubClaims> {
   if (claims.repository !== EXPECTED_REPOSITORY) throw new Error("oidc_repository_mismatch");
   if (claims.repository_id !== EXPECTED_REPOSITORY_ID) throw new Error("oidc_repository_id_mismatch");
   if (claims.ref !== EXPECTED_REF) throw new Error("oidc_ref_mismatch");
-  if (!new Set(["schedule", "workflow_dispatch"]).has(String(claims.event_name ?? ""))) {
+  if (!new Set(["schedule", "workflow_dispatch", "push"]).has(String(claims.event_name ?? ""))) {
     throw new Error("oidc_event_not_allowed");
   }
   const workflow = String(claims.job_workflow_ref ?? claims.workflow_ref ?? "");
