@@ -33,7 +33,7 @@ export default function Sidebar() {
             <p className="mt-1 text-[11px] text-mist/45">Центр управления</p>
           </div>
           <span className="ml-auto rounded-full border border-signal/25 bg-signal/[.1] px-2.5 py-1 text-[10px] font-semibold text-signal">
-            0.56
+            0.64
           </span>
         </div>
 
