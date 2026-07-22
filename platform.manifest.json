@@ -1,15 +1,17 @@
 {
   "platform": "AI Platform Core",
-  "version": "0.75.0",
-  "codename": "Official Measure Directions",
+  "version": "0.76.0",
+  "codename": "Catalogue Candidate Pipeline",
   "components": {
     "core": "0.72.0",
-    "web": "0.75.0",
-    "schemas": "0.75.0",
+    "web": "0.76.0",
+    "schemas": "0.76.0",
     "runtime": "0.72.0",
     "governmentIntelligence": "0.72.0",
     "evidenceReview": "0.74.1",
-    "measureDirections": "0.75.0"
+    "measureDirections": "0.75.0",
+    "catalogueControl": "0.76.0",
+    "projectDataPlaneE2E": "0.76.0"
   },
   "architecture": {
     "layers": [
@@ -21,7 +23,7 @@
       "learning",
       "platform"
     ],
-    "verticalSlice": "project profile + documents -> parsing -> facts -> machine evidence match -> human expert review -> eligibility -> truth gate -> official expense directions -> decision cards -> application route -> controlled forecast",
+    "verticalSlice": "official source snapshot -> machine candidate -> expert review -> structured measure -> verified requirements -> eligibility; project profile + documents -> parsing -> facts -> analysis -> truth gate -> persistence -> data-plane E2E audit",
     "epistemicContract": [
       "signal-is-not-fact",
       "trend-is-not-requirement",
@@ -32,15 +34,35 @@
       "verified-requirement-requires-human-reviewed-tier-a-evidence",
       "direction-match-is-not-eligibility",
       "machine-direction-is-not-human-verified",
-      "one-legal-mechanism-is-not-many-programmes"
+      "one-legal-mechanism-is-not-many-programmes",
+      "candidate-measure-is-not-active-measure",
+      "candidate-cannot-support-eligibility",
+      "data-plane-e2e-is-not-telegram-transport-e2e"
     ]
   },
   "catalogue": {
-    "supportMeasures": 2,
+    "activeSupportMeasures": 2,
+    "candidateMeasures": 12,
+    "machineCandidates": 12,
+    "humanApprovedCandidates": 0,
+    "promotedCandidates": 0,
     "structuredDirections": 16,
     "humanVerifiedDirections": 0,
+    "candidateLegalEffect": "discovery_and_review_only",
     "directionLegalEffect": "relevance_hint_only",
-    "sourceDocument": "Приказ Минсельхоза России от 25.03.2025 № 187"
+    "promotionRule": "human review plus verified mandatory requirements plus explicit promotion"
+  },
+  "projectDataPlane": {
+    "productionAuditStatus": "passed",
+    "documentsTotal": 14,
+    "documentsParsed": 14,
+    "documentChunks": 19,
+    "factCandidates": 11,
+    "confirmedFactCandidates": 11,
+    "verifiedProjectFacts": 11,
+    "measureMatches": 2,
+    "decisionCards": 2,
+    "telegramTransportE2E": "pending"
   },
   "productExperience": {
     "primaryJourney": [
@@ -57,6 +79,14 @@
       "explicit-human-decision",
       "atomic-audit-record",
       "truth-gate"
+    ],
+    "catalogueJourney": [
+      "telegram-authenticated-expert",
+      "active-measure-metrics",
+      "isolated-candidate-registry",
+      "stored-source-provenance",
+      "explicit-non-eligibility-warning",
+      "project-data-plane-e2e"
     ],
     "directionJourney": [
       "completed-core-analysis",
@@ -85,6 +115,10 @@
     "explicit-human-review",
     "evidence-review-audit",
     "verified-requirement-link",
+    "candidate-registry-isolation",
+    "candidate-no-eligibility-constraint",
+    "explicit-candidate-promotion",
+    "project-data-plane-e2e-audit",
     "direction-relevance-isolation",
     "no-direction-score-escalation",
     "truth-gated-decision-cards",
@@ -102,6 +136,7 @@
       "web",
       "telegram-mini-app",
       "evidence-review-workspace",
+      "catalogue-control-workspace",
       "measure-direction-enrichment"
     ]
   },
