@@ -126,7 +126,7 @@ as $$
     'latest_runs', coalesce((
       select jsonb_agg(to_jsonb(run_row) order by run_row.created_at desc)
       from (
-        select id, input_kind, status, engine_version, metrics, started_at, finished_at, created_at
+        select input_kind, status, engine_version, metrics, started_at, finished_at, created_at
         from public.gi_intelligence_runs
         order by created_at desc
         limit 10
