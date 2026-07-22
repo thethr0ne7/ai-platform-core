@@ -1,24 +1,31 @@
 {
   "platform": "AI Platform Core",
-  "version": "0.50.0",
+  "version": "0.72.0",
+  "codename": "VER436SIA Intelligence Merge",
   "components": {
     "core": "0.50.0",
     "web": "0.50.0",
-    "schemas": "0.50.0",
-    "runtime": "0.50.0"
+    "schemas": "0.72.0",
+    "runtime": "0.50.0",
+    "governmentIntelligence": "0.72.0"
   },
   "architecture": {
     "layers": [
       "product",
-      "capability",
+      "government-data-plane",
+      "evidence-and-truth",
+      "government-intelligence",
       "orchestration",
-      "ingestion",
-      "evidence",
       "learning",
-      "data",
       "platform"
     ],
-    "verticalSlice": "request -> planner -> capability resolution -> orchestration -> evidence -> result -> learning"
+    "verticalSlice": "official sources + project documents -> ingestion -> parsing -> evidence -> entities + canonical claims -> events + signals + relations -> temporal + graph + narrative analysis -> eligibility -> truth gate -> decision cards -> application route -> controlled forecast",
+    "epistemicContract": [
+      "signal-is-not-fact",
+      "trend-is-not-requirement",
+      "forecast-is-not-eligibility",
+      "narrative-is-not-legal-basis"
+    ]
   },
   "qualityGates": [
     "strict-types",
@@ -27,16 +34,24 @@
     "capability-registration",
     "health-check",
     "no-secrets-in-repository",
-    "replay-validation"
+    "replay-validation",
+    "evidence-provenance",
+    "truth-gated-decision-cards",
+    "controlled-forecasting"
   ],
   "deployment": {
     "source": "GitHub",
     "frontend": "Vercel",
     "data": "Supabase",
-    "aiRuntime": "Hugging Face compatible",
+    "intelligenceStore": "Supabase PostgreSQL",
     "surfaces": [
       "web",
       "telegram-mini-app"
     ]
+  },
+  "legacy": {
+    "repository": "thethr0ne7/ver436sia",
+    "status": "REFERENCE_MIGRATION_SOURCE",
+    "productionRuntime": false
   }
 }
