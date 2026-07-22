@@ -5,8 +5,11 @@ import { supabase } from '@/lib/supabase/client'
 
 type FactoryRun = {
   id?: string
+  run_label?: string
+  mode?: string
   status?: string
   started_at?: string
+  finished_at?: string
 }
 
 type PlatformStats = {
@@ -24,6 +27,15 @@ type PlatformStatsState = {
   error: string | null
 }
 
+const emptyStats: PlatformStats = {
+  institutions_total: 0,
+  programs_total: 0,
+  sources_total: 0,
+  ingestion_jobs_total: 0,
+  factory_runs_total: 0,
+  recent_runs: [],
+}
+
 export function usePlatformStats(): PlatformStatsState {
   const [state, setState] = useState<PlatformStatsState>({
     data: null,
@@ -35,37 +47,21 @@ export function usePlatformStats(): PlatformStatsState {
     let active = true
 
     async function load() {
-      const [institutions, programs, sources, jobs, runs] = await Promise.all([
-        supabase.from('institutions').select('*', { count: 'exact', head: true }),
-        supabase.from('programs').select('*', { count: 'exact', head: true }),
-        supabase.from('sources').select('*', { count: 'exact', head: true }),
-        supabase.from('ingestion_jobs').select('*', { count: 'exact', head: true }),
-        supabase
-          .from('factory_runs')
-          .select('*', { count: 'exact' })
-          .order('started_at', { ascending: false })
-          .limit(5),
-      ])
+      const { data, error } = await supabase.rpc('get_platform_overview')
 
       if (!active) return
 
-      const firstError = [institutions, programs, sources, jobs, runs].find(
-        (result) => result.error,
-      )?.error
-
-      if (firstError) {
-        setState({ data: null, loading: false, error: firstError.message })
+      if (error) {
+        setState({ data: null, loading: false, error: 'Не удалось получить общие показатели платформы.' })
         return
       }
 
+      const value = (data ?? {}) as Partial<PlatformStats>
       setState({
         data: {
-          institutions_total: institutions.count ?? 0,
-          programs_total: programs.count ?? 0,
-          sources_total: sources.count ?? 0,
-          ingestion_jobs_total: jobs.count ?? 0,
-          factory_runs_total: runs.count ?? 0,
-          recent_runs: (runs.data ?? []) as FactoryRun[],
+          ...emptyStats,
+          ...value,
+          recent_runs: Array.isArray(value.recent_runs) ? value.recent_runs : [],
         },
         loading: false,
         error: null,
