@@ -31,6 +31,7 @@ const emptySummary: EvidenceReviewSummary = {
   verifiedTasks: 0,
   blockedTasks: 0,
   rejectedTasks: 0,
+  machineMatches: 0,
   verifiedEvidence: 0,
   verifiedRequirements: 0,
 };
@@ -71,7 +72,7 @@ export function EvidenceReviewWorkspace() {
       setTasks(result.tasks);
       setSummary(result.summary);
       setMessage(result.tasks.length
-        ? `Задач в рабочей очереди: ${result.tasks.length}. Подтверждение возможно только по точной цитате из Tier A документа.`
+        ? `В рабочей очереди ${result.tasks.length}. Машинное совпадение — только кандидат; подтверждённым требование становится после вашего решения.`
         : "Открытых задач проверки сейчас нет.");
     } catch (error) {
       setMessage(friendlyError(error));
@@ -111,7 +112,7 @@ export function EvidenceReviewWorkspace() {
             <div className="min-w-0">
               <div className="status-pill"><ShieldCheck size={15} /> Экспертный доступ · {roleLabel(status?.role)}</div>
               <h1 className="mt-4 max-w-4xl text-3xl font-semibold tracking-[-.04em] sm:text-5xl">Проверка доказательств</h1>
-              <p className="mt-3 max-w-3xl text-sm leading-6 text-mist/55">Здесь требование становится подтверждённым только после точного совпадения цитаты с сохранённой версией официального документа уровня Tier A.</p>
+              <p className="mt-3 max-w-3xl text-sm leading-6 text-mist/55">Машина ищет буквальное совпадение в сохранённой Tier A версии. Но статус «подтверждено» возникает только после реального решения эксперта, точной цитаты и locator.</p>
             </div>
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
               <a href="/" className="secondary-cta"><ArrowLeft size={15} /> К проектам</a>
@@ -121,10 +122,10 @@ export function EvidenceReviewWorkspace() {
         </header>
 
         <div className="report-metrics-grid mt-3">
-          <Metric title="Открытые задачи" value={summary.openTasks} note="нужно разобрать" />
-          <Metric title="Проверено задач" value={summary.verifiedTasks} note="закрыто доказательствами" accent />
-          <Metric title="Доказательства" value={summary.verifiedEvidence} note="verified evidence" accent />
-          <Metric title="Требования" value={summary.verifiedRequirements} note="подтверждено" accent />
+          <Metric title="Открытые задачи" value={summary.openTasks} note="ожидают решения" />
+          <Metric title="Совпадения машины" value={summary.machineMatches} note="не являются подтверждением" />
+          <Metric title="Решения эксперта" value={summary.verifiedEvidence} note="human-reviewed evidence" accent />
+          <Metric title="Требования" value={summary.verifiedRequirements} note="подтверждено экспертом" accent />
         </div>
 
         <div className="workspace-notice glass-surface mt-3" role="status">
@@ -177,6 +178,7 @@ function EvidenceTaskCard({
   const [locator, setLocator] = useState(task.candidate_locator ?? "");
   const [notes, setNotes] = useState(task.task_notes ?? "");
   const canVerify = task.task_type === "quote_locator" && task.evidence_tier === "A" && task.owner_validation_status === "verified" && Boolean(task.source_version_id);
+  const hasMachineCandidate = task.task_type === "quote_locator" && Boolean(task.candidate_quote);
 
   return (
     <article className="glass-surface min-w-0 rounded-[28px] p-4 sm:p-6">
@@ -186,8 +188,9 @@ function EvidenceTaskCard({
           <h2 className="mt-2 break-words text-xl font-semibold leading-7">{task.task_title}</h2>
           <p className="mt-2 break-words text-sm leading-6 text-mist/55">{task.measure_title}</p>
         </div>
-        <div className="flex flex-wrap gap-2 sm:max-w-44 sm:justify-end">
+        <div className="flex flex-wrap gap-2 sm:max-w-52 sm:justify-end">
           <StatusChip value={task.task_status} />
+          {hasMachineCandidate ? <span className="status-chip">Совпадение найдено машиной</span> : null}
           <span className={`status-chip ${task.evidence_tier === "A" ? "status-chip-active" : ""}`}>Tier {task.evidence_tier ?? "—"}</span>
         </div>
       </div>
@@ -198,6 +201,8 @@ function EvidenceTaskCard({
         <Info title="Документ" value={task.document_title ?? "Документ не привязан"} />
         <Info title="Владелец источника" value={task.owner_validation_status === "verified" ? "Подтверждён" : "Не подтверждён"} />
       </div>
+
+      {hasMachineCandidate ? <div className="mt-4 rounded-[18px] border border-signal/20 bg-signal/[.035] p-4 text-sm leading-6 text-mist/60"><strong className="text-signal">Важно:</strong> система нашла буквальный фрагмент и подготовила поля ниже. Это ещё не юридическое подтверждение — проверьте смысл, редакцию документа и locator.</div> : null}
 
       {task.canonical_url ? <a className="report-link" href={task.canonical_url} target="_blank" rel="noreferrer">Открыть официальный документ <ArrowUpRight size={14} /></a> : null}
 
@@ -218,7 +223,7 @@ function EvidenceTaskCard({
       <label className="mt-3 block"><span className="mb-2 block text-xs text-mist/50">Комментарий эксперта</span><textarea className="min-h-20 w-full rounded-[18px] border border-white/[.08] bg-black/25 p-4 text-sm leading-6 text-mist outline-none transition placeholder:text-mist/25 focus:border-signal/30" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Причина решения, конфликт редакций или следующий шаг" /></label>
 
       <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-        {canVerify ? <button className="primary-cta" disabled={disabled} onClick={() => onReview({ decision: "verified", quote, locator, notes })}>{busy ? <LoaderCircle className="animate-spin" size={15} /> : <CheckCircle2 size={15} />} Подтвердить</button> : null}
+        {canVerify ? <button className="primary-cta" disabled={disabled} onClick={() => onReview({ decision: "verified", quote, locator, notes })}>{busy ? <LoaderCircle className="animate-spin" size={15} /> : <CheckCircle2 size={15} />} Подтвердить как эксперт</button> : null}
         <button className="secondary-cta" disabled={disabled} onClick={() => onReview({ decision: "blocked", notes })}><Ban size={15} /> Заблокировать</button>
         <button className="secondary-cta" disabled={disabled} onClick={() => onReview({ decision: "rejected", notes })}><X size={15} /> Отклонить</button>
         {["blocked", "rejected"].includes(task.task_status) ? <button className="secondary-cta" disabled={disabled} onClick={() => onReview({ decision: "reopened", notes })}><RotateCcw size={15} /> Вернуть</button> : null}
@@ -240,10 +245,10 @@ function Info({ title, value }: { title: string; value: string }) {
 function StatusChip({ value }: { value: string }) {
   const labels: Record<string, string> = {
     pending: "Ожидает",
-    in_progress: "В работе",
+    in_progress: "Нужна проверка эксперта",
     blocked: "Заблокировано",
     rejected: "Отклонено",
-    verified: "Подтверждено",
+    verified: "Подтверждено экспертом",
   };
   return <span className={`status-chip ${value === "verified" ? "status-chip-active" : ""}`}>{labels[value] ?? value}</span>;
 }
@@ -267,7 +272,7 @@ function roleLabel(role: string | null | undefined) {
 }
 
 function reviewSuccessMessage(decision: ReviewInput["decision"]) {
-  if (decision === "verified") return "Требование подтверждено: цитата совпала с сохранённой Tier A версией, решение записано в аудит.";
+  if (decision === "verified") return "Экспертное решение записано: цитата совпала с Tier A версией, требование связано с human-reviewed evidence.";
   if (decision === "blocked") return "Задача заблокирована до появления подходящего документа или устранения конфликта.";
   if (decision === "rejected") return "Кандидат доказательства отклонён и не участвует в Truth Gate.";
   return "Задача возвращена в рабочую очередь.";
@@ -286,6 +291,8 @@ function friendlyError(error: unknown) {
     verification_requires_exact_quote: "Цитата слишком короткая или отсутствует.",
     verification_requires_locator: "Укажите пункт, страницу или другой точный locator.",
     quote_not_found_in_source_version: "Цитата не найдена в сохранённой версии документа. Нельзя подтверждать пересказ или изменённый текст.",
+    verified_evidence_requires_human_review: "Машинное совпадение нельзя записать как экспертно подтверждённое доказательство.",
+    verified_requirement_requires_human_reviewed_evidence: "Требование нельзя подтвердить без реального экспертного решения.",
   };
   const key = Object.keys(labels).find((item) => raw.includes(item));
   return key ? labels[key] : raw || "Не удалось выполнить экспертную проверку.";
