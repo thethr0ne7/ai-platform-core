@@ -188,7 +188,7 @@ export function GovernmentOpportunityReport({ report }: { report: GovernmentOppo
         </div>
       </ReportBlock>
 
-      <ReportBlock id="report-measures" title="Меры поддержки" subtitle="Сначала показываем решение и блокеры; подробная матрица открывается по запросу" icon={<Landmark size={19} />}>
+      <ReportBlock id="report-measures" title="Меры поддержки" subtitle="Сначала показываем решение и блокеры; направления расходов не отменяют требования меры" icon={<Landmark size={19} />}>
         <div className="grid gap-3 xl:grid-cols-2">
           {measures.length ? measures.map((measure, index) => <MeasureCard key={String(measure.id ?? `${text(measure.title)}-${index}`)} measure={measure} />) : <Empty value="Меры ещё не прошли проверку требований для этого проекта." />}
         </div>
@@ -238,7 +238,7 @@ export function GovernmentOpportunityReport({ report }: { report: GovernmentOppo
             <SmallMetric title="Подтверждено" value={numberValue(evidence.verified_records)} accent={numberValue(evidence.verified_records) > 0} />
             <SmallMetric title="Доля проверки" value={`${verificationRate}%`} />
           </div>
-          <div className="mt-4 rounded-[20px] border border-signal/20 bg-signal/[.045] p-4 text-sm leading-6 text-mist/65">{numberValue(evidence.verified_records) > 0 ? `Правило: ${text(evidence.policy, "Только официальные источники")}` : "Выводы остаются предварительными: первичные цитаты и требования ещё не подтверждены."}</div>
+          <div className="mt-4 rounded-[20px] border border-signal/20 bg-signal/[.045] p-4 text-sm leading-6 text-mist/65">{numberValue(evidence.verified_records) > 0 ? `Правило: ${text(evidence.policy, "Только официальные источники")}` : "Выводы остаются предварительными: первичные цитаты и требования ещё не подтверждены экспертом."}</div>
         </ReportBlock>
 
         <ReportBlock title="Состояние источников" subtitle="Технические сбои переведены в понятные категории" icon={<Activity size={19} />}>
@@ -280,6 +280,8 @@ function MeasureCard({ measure }: { measure: Record<string, unknown> }) {
   const blockers = strings(measure.blockers);
   const missing = strings(measure.missing_data);
   const requirementMatrix = records(measure.requirement_matrix);
+  const directionMatches = records(measure.direction_matches);
+  const directionsTotal = numberValue(measure.directions_total);
   const score = Math.max(0, Math.min(100, Math.round(numberValue(measure.score))));
   const status = text(measure.eligibility_status, "manual_review");
   const matched = requirementMatrix.filter((item) => ["matched", "verified", "match"].includes(text(item.status, ""))).length;
@@ -287,15 +289,37 @@ function MeasureCard({ measure }: { measure: Record<string, unknown> }) {
   return <article className="measure-card clay-inset rounded-[26px] p-4 sm:p-5">
     <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_72px] sm:items-start">
       <div className="min-w-0"><p className="text-[11px] font-medium text-signal">{label(measure.measure_type)}</p><h3 className="mt-2 break-words text-xl font-semibold leading-7">{text(measure.title)}</h3><p className="mt-2 text-xs leading-5 text-mist/50">{text(measure.authority)}</p></div>
-      <div className="score-badge"><strong>{score}%</strong><span>совпадение</span></div>
+      <div className="score-badge"><strong>{score}%</strong><span>по требованиям</span></div>
     </div>
     <p className="mt-4 text-sm leading-6 text-mist/65">{text(measure.rationale, text(measure.summary, "Описание уточняется по официальному документу."))}</p>
     <div className="mt-4 flex flex-wrap gap-2"><StatusBadge status={status} /><StatusBadge status={measure.status} quiet /></div>
+    {directionMatches.length ? <DirectionMatches directions={directionMatches} total={directionsTotal} note={text(measure.direction_match_note, "")} /> : directionsTotal > 0 ? <div className="mt-4 rounded-[18px] border border-white/[.07] p-4 text-xs leading-5 text-mist/45">В документе структурировано направлений расходов: {directionsTotal}. По текущему описанию проекта тематических совпадений не найдено.</div> : null}
     {requirementMatrix.length ? <details className="requirement-details mt-4"><summary><span>Требования</span><span>{matched} из {requirementMatrix.length} выполнено</span><ChevronDown size={16} /></summary><div className="mt-3 space-y-2">{requirementMatrix.map((requirement, index) => <RequirementRow key={`${text(requirement.requirement_key)}-${index}`} requirement={requirement} index={index} />)}</div></details> : null}
     {blockers.length ? <MiniList title="Что мешает" items={blockers} emphasized /> : null}
     {missing.length ? <MiniList title="Что нужно подтвердить" items={missing} /> : null}
     {typeof measure.official_url === "string" && measure.official_url && <a className="report-link" href={measure.official_url} target="_blank" rel="noreferrer">Официальный источник <ArrowUpRight size={14} /></a>}
   </article>;
+}
+
+function DirectionMatches({ directions, total, note }: { directions: Array<Record<string, unknown>>; total: number; note: string }) {
+  return <details className="requirement-details mt-4" open>
+    <summary><span>Релевантные направления расходов</span><span>{directions.length} из {total}</span><ChevronDown size={16} /></summary>
+    <div className="mt-3 rounded-[18px] border border-signal/20 bg-signal/[.035] p-4 text-xs leading-5 text-mist/55"><strong className="text-signal">Не является допуском к мере.</strong> {note || "Сначала проверяются регион, заявитель и подтверждённые требования."}</div>
+    <div className="mt-3 space-y-2">
+      {directions.map((direction, index) => {
+        const reviewed = direction.human_reviewed === true;
+        const terms = strings(direction.matched_terms);
+        return <article key={String(direction.id ?? `${text(direction.code)}-${index}`)} className="rounded-[18px] border border-white/[.07] p-3.5">
+          <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
+            <div className="min-w-0"><p className="break-words text-sm font-medium leading-5">{text(direction.title)}</p><p className="mt-2 text-xs leading-5 text-mist/55">{text(direction.description)}</p></div>
+            <span className={`status-chip ${reviewed ? "status-chip-active" : ""}`}>{reviewed ? "Проверено экспертом" : "Извлечено машиной"}</span>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2"><span className="status-chip">Релевантность {numberValue(direction.relevance_score)}%</span>{terms.slice(0, 4).map((term) => <span key={term} className="status-chip">{term}</span>)}</div>
+          <details className="technical-details mt-3"><summary>Основание в документе</summary><p>{text(direction.source_locator)}</p><p>{text(direction.evidence_quote)}</p></details>
+        </article>;
+      })}
+    </div>
+  </details>;
 }
 
 function RequirementRow({ requirement, index }: { requirement: Record<string, unknown>; index: number }) {
