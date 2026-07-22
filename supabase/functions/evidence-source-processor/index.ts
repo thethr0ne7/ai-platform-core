@@ -22,7 +22,7 @@ type QueueTask = {
     evidence_tier: string;
   } | null;
 };
-type RelayResponse = {
+type FetchResponse = {
   ok: boolean;
   status: number;
   requestedUrl: string;
@@ -30,6 +30,7 @@ type RelayResponse = {
   contentType: string;
   bodyBase64?: string;
   truncated?: boolean;
+  acquisition?: "direct" | "vercel_relay";
   error?: string;
 };
 
@@ -39,6 +40,8 @@ const db = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 const RELAY_URL = "https://ai-platform-core.vercel.app/api/source-relay";
+const USER_AGENT = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 Version/18.5 Mobile Safari/604.1 EvidenceFoundation/0.66";
+const MAX_BYTES = 2_500_000;
 const MAX_TEXT = 3_000_000;
 const MAX_PAGES = 180;
 
@@ -76,7 +79,7 @@ async function processQueue(token: string, limit: number) {
   const { data, error } = await db
     .from("gi_evidence_verification_queue")
     .select("id,task_type,target_url,source_document_id,status,gi_source_documents(id,source_key,canonical_url,title,authority,document_number,published_at,evidence_tier)")
-    .eq("status", "pending")
+    .in("status", ["pending", "blocked"])
     .in("task_type", ["source_link", "edition_check"])
     .not("source_document_id", "is", null)
     .order("priority", { ascending: true })
@@ -100,37 +103,39 @@ async function processTask(token: string, task: QueueTask) {
     .from("gi_evidence_verification_queue")
     .update({ status: "in_progress", updated_at: claimedAt })
     .eq("id", task.id)
-    .eq("status", "pending")
+    .in("status", ["pending", "blocked"])
     .select("id")
     .maybeSingle();
   if (claimError) throw claimError;
   if (!claimed) return { taskId: task.id, status: "skipped", reason: "already_claimed" };
 
   try {
-    const landing = await relayFetch(token, task.target_url);
+    const landing = await fetchSource(token, task.target_url);
     if (!landing.ok || !landing.bodyBase64) throw new Error(landing.error ?? `source_http_${landing.status}`);
 
     let bytes = decodeBase64(landing.bodyBase64);
     let contentType = landing.contentType.toLowerCase();
     let extractionUrl = landing.finalUrl;
+    let acquisition = landing.acquisition ?? "direct";
     let pages: Array<{ locator: string; text: string }> = [];
-    let extractionMethod = "evidence-html-v065";
+    let extractionMethod = "evidence-html-v066";
 
     if (contentType.includes("pdf") || hasPdfSignature(bytes)) {
       pages = await parsePdf(bytes);
-      extractionMethod = "evidence-unpdf-v065";
+      extractionMethod = "evidence-unpdf-v066";
     } else {
       const html = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
       const pdfUrl = discoverPdfUrl(landing.finalUrl, html);
       if (pdfUrl) {
-        const pdf = await relayFetch(token, pdfUrl);
+        const pdf = await fetchSource(token, pdfUrl);
         if (pdf.ok && pdf.bodyBase64) {
           bytes = decodeBase64(pdf.bodyBase64);
           contentType = pdf.contentType.toLowerCase();
           extractionUrl = pdf.finalUrl;
+          acquisition = pdf.acquisition ?? acquisition;
           if (contentType.includes("pdf") || hasPdfSignature(bytes)) {
             pages = await parsePdf(bytes);
-            extractionMethod = "evidence-unpdf-v065";
+            extractionMethod = "evidence-unpdf-v066";
           }
         }
       }
@@ -168,10 +173,13 @@ async function processTask(token: string, task: QueueTask) {
         extraction_method: extractionMethod,
         citations,
         metadata: {
-          evidence_capture_engine: "evidence-source-processor-v0.65",
+          evidence_capture_engine: "evidence-source-processor-v0.66",
           evidence_tier: document.evidence_tier,
+          canonical_official_url: document.canonical_url,
+          acquisition_url: task.target_url,
           landing_url: landing.finalUrl,
           extraction_url: extractionUrl,
+          acquisition,
           content_type: contentType,
           pages: normalizedPages.length,
           characters: combinedText.length,
@@ -194,6 +202,7 @@ async function processTask(token: string, task: QueueTask) {
         characters: combinedText.length,
         extraction_method: extractionMethod,
         extraction_url: extractionUrl,
+        acquisition,
         human_verification_required: true,
       },
       notes: "Официальный текст сохранён. Автоматическая фиксация не подтверждает юридические требования: требуется проверка цитат и локаторов.",
@@ -208,6 +217,7 @@ async function processTask(token: string, task: QueueTask) {
       pages: normalizedPages.length,
       characters: combinedText.length,
       extractionMethod,
+      acquisition,
     };
   } catch (error) {
     const message = sanitizeError(error);
@@ -221,18 +231,101 @@ async function processTask(token: string, task: QueueTask) {
   }
 }
 
-async function relayFetch(token: string, url: string): Promise<RelayResponse> {
-  const response = await fetch(RELAY_URL, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-source-relay-token": token,
-    },
-    body: JSON.stringify({ url }),
-  });
-  const payload = await response.json() as RelayResponse;
-  if (!response.ok && !payload.error) payload.error = `relay_http_${response.status}`;
-  return payload;
+async function fetchSource(token: string, url: string): Promise<FetchResponse> {
+  const direct = await directFetch(url);
+  if (direct.ok && direct.bodyBase64) return direct;
+
+  try {
+    const response = await fetch(RELAY_URL, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-source-relay-token": token,
+      },
+      body: JSON.stringify({ url }),
+    });
+    const payload = await response.json() as FetchResponse;
+    payload.acquisition = "vercel_relay";
+    if (!response.ok && !payload.error) payload.error = `relay_http_${response.status}`;
+    return payload;
+  } catch (error) {
+    return {
+      ok: false,
+      status: 0,
+      requestedUrl: url,
+      finalUrl: url,
+      contentType: "",
+      acquisition: "vercel_relay",
+      error: `direct:${direct.error ?? "failed"}; relay:${sanitizeError(error)}`,
+    };
+  }
+}
+
+async function directFetch(url: string): Promise<FetchResponse> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 40_000);
+  try {
+    const response = await fetch(url, {
+      redirect: "follow",
+      signal: controller.signal,
+      headers: {
+        "user-agent": USER_AGENT,
+        accept: "text/html,application/xhtml+xml,application/pdf,application/xml;q=0.9,text/plain;q=0.8,*/*;q=0.5",
+        "accept-language": "ru-RU,ru;q=0.9,en;q=0.5",
+        "cache-control": "no-cache",
+      },
+    });
+    const bytes = await readLimited(response, MAX_BYTES);
+    return {
+      ok: response.ok,
+      status: response.status,
+      requestedUrl: url,
+      finalUrl: response.url || url,
+      contentType: response.headers.get("content-type") ?? "",
+      bodyBase64: encodeBase64(bytes),
+      truncated: bytes.byteLength >= MAX_BYTES,
+      acquisition: "direct",
+      error: response.ok ? undefined : `HTTP ${response.status}`,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      status: 0,
+      requestedUrl: url,
+      finalUrl: url,
+      contentType: "",
+      acquisition: "direct",
+      error: sanitizeError(error),
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function readLimited(response: Response, maxBytes: number): Promise<Uint8Array> {
+  if (!response.body) return new Uint8Array();
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    if (!value) continue;
+    const remaining = maxBytes - total;
+    if (remaining <= 0) break;
+    const chunk = value.byteLength > remaining ? value.slice(0, remaining) : value;
+    chunks.push(chunk);
+    total += chunk.byteLength;
+    if (total >= maxBytes) break;
+  }
+  await reader.cancel().catch(() => undefined);
+  const output = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    output.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return output;
 }
 
 async function parsePdf(bytes: Uint8Array) {
@@ -305,6 +398,15 @@ function decodeBase64(value: string): Uint8Array {
   const output = new Uint8Array(binary.length);
   for (let index = 0; index < binary.length; index += 1) output[index] = binary.charCodeAt(index);
   return output;
+}
+
+function encodeBase64(bytes: Uint8Array): string {
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, Math.min(offset + chunkSize, bytes.length)));
+  }
+  return btoa(binary);
 }
 
 async function verifySchedulerToken(token: string) {
