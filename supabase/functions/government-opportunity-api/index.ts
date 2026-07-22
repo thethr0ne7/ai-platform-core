@@ -55,15 +55,22 @@ Deno.serve(async (req) => {
     });
     if (enrichedReport.error) throw enrichedReport.error;
 
+    const truthReport = await db.rpc("gi_apply_truth_gate", {
+      p_report: enrichedReport.data,
+    });
+    if (truthReport.error) throw truthReport.error;
+
     const sourceCatalog = await db.rpc("gi_get_source_catalog_for_report");
     if (sourceCatalog.error) throw sourceCatalog.error;
 
+    const truthData = truthReport.data as Record<string, unknown>;
     const report = {
-      ...(enrichedReport.data as Record<string, unknown>),
+      ...truthData,
       sources: sourceCatalog.data ?? [],
       metadata: {
-        ...(((enrichedReport.data as Record<string, unknown>)?.metadata as Record<string, unknown>) ?? {}),
+        ...((truthData?.metadata as Record<string, unknown>) ?? {}),
         source_health_engine: "official-source-ingestion-v0.59",
+        truth_gate_engine: "truth-gate-v0.60",
         source_catalog_generated_at: new Date().toISOString(),
       },
     };
