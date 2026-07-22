@@ -1,2 +1,3 @@
-legal-ocr-run: 2026-07-22T12:40:00Z
-reason: process two pending Tier A legal PDFs
+legal-ocr-run: 2026-07-22T13:04:00Z
+reason: retry two Tier A legal PDFs after pgcrypto search-path fix
+expected: manual_review, verified=false
