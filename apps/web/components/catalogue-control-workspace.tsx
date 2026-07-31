@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
@@ -126,8 +127,8 @@ export function CatalogueControlWorkspace() {
               </p>
             </div>
             <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-1">
-              <a href="/" className="secondary-cta"><ArrowLeft size={15} /> К проектам</a>
-              <a href="/evidence-review" className="secondary-cta"><FileSearch size={15} /> Evidence Review</a>
+              <Link href="/" className="secondary-cta"><ArrowLeft size={15} /> К проектам</Link>
+              <Link href="/evidence-review" className="secondary-cta"><FileSearch size={15} /> Evidence Review</Link>
               <button className="primary-cta" disabled={busy} onClick={() => void load()}>
                 {busy ? <LoaderCircle className="animate-spin" size={15} /> : <RefreshCw size={15} />} Обновить
               </button>
@@ -289,7 +290,7 @@ function LoadingScreen() {
 }
 
 function AccessDenied({ message, onRetry }: { message: string; onRetry: () => void }) {
-  return <main className="app-shell"><div className="mx-auto min-h-screen max-w-3xl px-4 py-8"><section className="glass-surface rounded-[28px] p-6 sm:p-10"><Landmark className="text-signal" size={28} /><h1 className="mt-5 text-3xl font-semibold">Доступ ограничен</h1><p className="mt-3 text-sm leading-6 text-mist/55">{message}</p><div className="mt-5 grid gap-2 sm:grid-cols-2"><a className="secondary-cta" href="/"><ArrowLeft size={15} /> К проектам</a><button className="primary-cta" onClick={onRetry}><RefreshCw size={15} /> Повторить</button></div></section></div></main>;
+  return <main className="app-shell"><div className="mx-auto min-h-screen max-w-3xl px-4 py-8"><section className="glass-surface rounded-[28px] p-6 sm:p-10"><Landmark className="text-signal" size={28} /><h1 className="mt-5 text-3xl font-semibold">Доступ ограничен</h1><p className="mt-3 text-sm leading-6 text-mist/55">{message}</p><div className="mt-5 grid gap-2 sm:grid-cols-2"><Link className="secondary-cta" href="/"><ArrowLeft size={15} /> К проектам</Link><button className="primary-cta" onClick={onRetry}><RefreshCw size={15} /> Повторить</button></div></section></div></main>;
 }
 
 function friendlyError(error: unknown) {

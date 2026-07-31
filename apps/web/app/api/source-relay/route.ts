@@ -5,8 +5,8 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
-const EXPECTED_TOKEN_HASH = '2293a393e8c637c9de4ab67fc882af3ecd2e18222d70ef50495fde2b284a76e5'
 const MAX_RESPONSE_BYTES = 2_500_000
+const MAX_REDIRECTS = 5
 const ALLOWED_HOST_SUFFIXES = ['.gov.ru', '.kbr.ru']
 const ALLOWED_HOSTS = new Set([
   'government.ru',
@@ -64,19 +64,8 @@ export async function POST(request: NextRequest) {
   const timer = setTimeout(() => controller.abort(), 45_000)
 
   try {
-    const response = await fetch(target, {
-      redirect: 'follow',
-      signal: controller.signal,
-      cache: 'no-store',
-      headers: {
-        'user-agent': USER_AGENT,
-        accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,application/json;q=0.8,text/plain;q=0.7,*/*;q=0.3',
-        'accept-language': 'ru-RU,ru;q=0.9,en;q=0.6',
-        'cache-control': 'no-cache',
-      },
-    })
-
-    const finalUrl = validateTarget(response.url || target.toString()).toString()
+    const { response, finalUrl: finalUrlObj } = await fetchWithValidatedRedirects(target, controller.signal)
+    const finalUrl = finalUrlObj.toString()
     const contentType = response.headers.get('content-type') ?? ''
     const bytes = await readLimited(response, MAX_RESPONSE_BYTES)
 
@@ -112,10 +101,50 @@ export async function POST(request: NextRequest) {
   }
 }
 
+async function fetchWithValidatedRedirects(
+  initialTarget: URL,
+  signal: AbortSignal,
+): Promise<{ response: Response; finalUrl: URL }> {
+  let current = initialTarget
+
+  for (let hop = 0; ; hop++) {
+    const response = await fetch(current, {
+      redirect: 'manual',
+      signal,
+      cache: 'no-store',
+      headers: {
+        'user-agent': USER_AGENT,
+        accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,application/json;q=0.8,text/plain;q=0.7,*/*;q=0.3',
+        'accept-language': 'ru-RU,ru;q=0.9,en;q=0.6',
+        'cache-control': 'no-cache',
+      },
+    })
+
+    const isRedirect = response.status >= 300 && response.status < 400
+    const location = response.headers.get('location')
+    if (!isRedirect || !location) {
+      return { response, finalUrl: current }
+    }
+
+    if (hop >= MAX_REDIRECTS) throw new Error('too_many_redirects')
+    // Every hop is re-validated against the allowlist and private-network block before
+    // it is followed, so a compromised or misbehaving allowed host cannot redirect this
+    // relay into fetching an internal address.
+    current = validateTarget(new URL(location, current).toString())
+  }
+}
+
 function validToken(token: string): boolean {
   if (!token) return false
+  const expectedHash = process.env.SOURCE_RELAY_TOKEN_HASH ?? ''
+  if (!expectedHash) return false
   const actual = createHash('sha256').update(token).digest()
-  const expected = Buffer.from(EXPECTED_TOKEN_HASH, 'hex')
+  let expected: Buffer
+  try {
+    expected = Buffer.from(expectedHash, 'hex')
+  } catch {
+    return false
+  }
   return actual.byteLength === expected.byteLength && timingSafeEqual(actual, expected)
 }
 
