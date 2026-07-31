@@ -75,6 +75,7 @@ export function TelegramProjectWorkspace() {
   const [mode, setMode] = useState<"list" | "edit">("list");
   const [message, setMessage] = useState("Проверяем Telegram-профиль…");
   const [report, setReport] = useState<GovernmentOpportunityReportData | null>(null);
+  const [step, setStep] = useState(1);
 
   const uploadedCount = useMemo(
     () => documents.filter((document) => document.uploaded).length,
@@ -108,6 +109,7 @@ export function TelegramProjectWorkspace() {
     setDocuments([]);
     setReport(null);
     setMode("edit");
+    setStep(1);
     setMessage("Заполните профиль проекта. Затем добавьте документы и запустите проверку.");
   }
 
@@ -123,7 +125,12 @@ export function TelegramProjectWorkspace() {
     setDocuments([]);
     setReport(null);
     setMode("edit");
+    setStep(1);
     setMessage("Проект открыт. Запустите анализ, чтобы получить актуальный маршрут.");
+  }
+
+  function goToStep(target: number) {
+    if (target <= activeStep) setStep(target);
   }
 
   function addFiles(fileList: FileList | null) {
@@ -240,6 +247,7 @@ export function TelegramProjectWorkspace() {
     try {
       const result = await callGovernmentOpportunityApi<{ report: GovernmentOpportunityReportData }>(projectId);
       setReport(result.report);
+      setStep(3);
       const list = await listTelegramProjects();
       setProjects(list.projects);
 
@@ -271,11 +279,15 @@ export function TelegramProjectWorkspace() {
             </div>
             <button className="secondary-cta" onClick={() => setMode("list")}><ArrowLeft size={15} /> Мои проекты</button>
           </div>
-          <WorkspaceStepper active={activeStep} />
+          <WorkspaceStepper active={activeStep} current={step} onSelect={goToStep} />
         </header>
 
-        <div className="mt-3 grid min-w-0 gap-3 lg:grid-cols-2">
-          <section className="workspace-panel glass-surface">
+        <div className="workspace-notice glass-surface mt-3" role="status">
+          {busy ? <span className="flex items-start gap-2"><LoaderCircle className="mt-1 shrink-0 animate-spin text-signal" size={17} /> {message}</span> : <span className="flex items-start gap-2"><CheckCircle2 className="mt-1 shrink-0 text-signal" size={17} /> {message}</span>}
+        </div>
+
+        {step === 1 && (
+          <section className="workspace-panel glass-surface mt-3">
             <SectionHeading icon={<Landmark size={18} />} title="Профиль проекта" subtitle="Основные данные для проверки условий программ" />
             <Field label="Название проекта"><input value={draft.name} placeholder="Например: ягодная ферма и агротуризм" onChange={(event) => setDraft({ ...draft, name: event.target.value })} /></Field>
             <Field label="Регион"><input value={draft.region} onChange={(event) => setDraft({ ...draft, region: event.target.value })} /></Field>
@@ -284,32 +296,39 @@ export function TelegramProjectWorkspace() {
               <Field label="Форма заявителя"><select value={draft.legalForm} onChange={(event) => setDraft({ ...draft, legalForm: event.target.value })}><option value="">Не выбрана</option><option>Физическое лицо</option><option>ИП</option><option>КФХ</option><option>ООО</option></select></Field>
               <Field label="Статус земли"><select value={draft.landStatus} onChange={(event) => setDraft({ ...draft, landStatus: event.target.value })}><option value="">Не указан</option><option>Собственность</option><option>Аренда</option><option>Участок выбран</option><option>Участка нет</option></select></Field>
             </div>
+            <button className="primary-cta mt-5 w-full" onClick={() => setStep(2)}>Далее: Документы <ArrowRight size={15} /></button>
           </section>
+        )}
 
-          <section className="workspace-panel glass-surface">
-            <SectionHeading icon={<FileText size={18} />} title="Документы" subtitle="Файлы разбираются, дубликаты определяются автоматически" />
-            <Field label="Категория документа"><select value={category} onChange={(event) => setCategory(event.target.value)}>{categories.map((item) => <option key={item}>{item}</option>)}</select></Field>
-            <label className="primary-cta relative mt-4 flex w-full cursor-pointer items-center justify-center overflow-hidden"><FileUp size={16} /> Добавить файлы<input ref={inputRef} className="absolute inset-0 h-full w-full cursor-pointer opacity-0" type="file" multiple accept=".pdf,.docx,.csv,.txt,.jpg,.jpeg,.png,.webp" onChange={(event) => addFiles(event.currentTarget.files)} disabled={busy} /></label>
-            <p className="mt-3 text-xs leading-5 text-mist/45">PDF, DOCX, CSV, TXT и изображения до 25 МБ. Сканированные файлы распознаются отдельно.</p>
-            <div className="mt-4 space-y-2">
-              {documents.map((document) => <DocumentRow key={document.id} document={document} onDelete={() => setDocuments((current) => current.filter((item) => item.id !== document.id))} />)}
-              {!documents.length ? <div className="rounded-[18px] border border-dashed border-white/10 p-4 text-sm leading-6 text-mist/40">Новые файлы ещё не добавлены. Ранее загруженные документы учитываются системой автоматически.</div> : null}
+        {step === 2 && (
+          <>
+            <section className="workspace-panel glass-surface mt-3">
+              <SectionHeading icon={<FileText size={18} />} title="Документы" subtitle="Файлы разбираются, дубликаты определяются автоматически" />
+              <Field label="Категория документа"><select value={category} onChange={(event) => setCategory(event.target.value)}>{categories.map((item) => <option key={item}>{item}</option>)}</select></Field>
+              <label className="primary-cta relative mt-4 flex w-full cursor-pointer items-center justify-center overflow-hidden"><FileUp size={16} /> Добавить файлы<input ref={inputRef} className="absolute inset-0 h-full w-full cursor-pointer opacity-0" type="file" multiple accept=".pdf,.docx,.csv,.txt,.jpg,.jpeg,.png,.webp" onChange={(event) => addFiles(event.currentTarget.files)} disabled={busy} /></label>
+              <p className="mt-3 text-xs leading-5 text-mist/45">PDF, DOCX, CSV, TXT и изображения до 25 МБ. Сканированные файлы распознаются отдельно.</p>
+              <div className="mt-4 space-y-2">
+                {documents.map((document) => <DocumentRow key={document.id} document={document} onDelete={() => setDocuments((current) => current.filter((item) => item.id !== document.id))} />)}
+                {!documents.length ? <div className="rounded-[18px] border border-dashed border-white/10 p-4 text-sm leading-6 text-mist/40">Новые файлы ещё не добавлены. Ранее загруженные документы учитываются системой автоматически.</div> : null}
+              </div>
+              <div className="mt-4 compact-row"><span>Подготовлено: {documents.length}</span><strong>Загружено: {uploadedCount}</strong></div>
+            </section>
+
+            <div className="glass-surface sticky bottom-3 z-30 mt-3 grid gap-2 rounded-[24px] p-3 shadow-2xl sm:grid-cols-3">
+              <button className="secondary-cta" onClick={() => setStep(1)}><ArrowLeft size={15} /> Назад</button>
+              <button disabled={busy} onClick={() => void saveProject()} className="secondary-cta"><Save size={15} /> Сохранить проект</button>
+              <button disabled={busy} onClick={() => void runCheck()} className="primary-cta">Провести полную проверку <ArrowRight size={15} /></button>
             </div>
-            <div className="mt-4 compact-row"><span>Подготовлено: {documents.length}</span><strong>Загружено: {uploadedCount}</strong></div>
-          </section>
-        </div>
+          </>
+        )}
 
-        <div className="workspace-notice glass-surface mt-3" role="status">
-          {busy ? <span className="flex items-start gap-2"><LoaderCircle className="mt-1 shrink-0 animate-spin text-signal" size={17} /> {message}</span> : <span className="flex items-start gap-2"><CheckCircle2 className="mt-1 shrink-0 text-signal" size={17} /> {message}</span>}
-        </div>
-
-        <div className="glass-surface sticky bottom-3 z-30 mt-3 grid gap-2 rounded-[24px] p-3 shadow-2xl sm:grid-cols-2">
-          <button disabled={busy} onClick={() => void saveProject()} className="secondary-cta"><Save size={15} /> Сохранить проект</button>
-          <button disabled={busy} onClick={() => void runCheck()} className="primary-cta">Провести полную проверку <ArrowRight size={15} /></button>
-        </div>
-
-        {draft.id ? <ProjectFactReview projectId={draft.id} onFactsChanged={() => setReport(null)} /> : null}
-        {report ? <GovernmentOpportunityReport report={report} /> : null}
+        {step === 3 && (
+          <>
+            <button className="secondary-cta mt-3" onClick={() => setStep(2)}><ArrowLeft size={15} /> Назад к документам</button>
+            {draft.id ? <ProjectFactReview projectId={draft.id} onFactsChanged={() => setReport(null)} /> : null}
+            {report ? <GovernmentOpportunityReport report={report} /> : null}
+          </>
+        )}
       </div>
     </main>
   );
@@ -323,13 +342,33 @@ function ProjectList({ identity, projects, busy, message, onNew, onOpen, onRefre
   return <main className="app-shell"><div className="mx-auto min-h-screen max-w-6xl px-3 py-4 sm:px-6 sm:py-8"><section className="glass-surface rounded-[28px] p-5 sm:p-8"><div className="grid gap-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"><div className="min-w-0"><div className="status-pill"><ShieldCheck size={15} /> Telegram подтверждён</div><h1 className="mt-4 text-3xl font-semibold tracking-[-.035em] sm:text-5xl">Проекты</h1><p className="mt-2 text-sm text-mist/50">{identity.firstName}{identity.username ? ` · @${identity.username}` : ""}</p></div><button className="primary-cta" onClick={onNew}><Plus size={16} /> Новый проект</button></div><div className="workspace-notice mt-6">{busy ? <span className="flex items-center gap-2"><LoaderCircle className="animate-spin" size={17} /> Обновляем данные…</span> : message}</div><div className="mt-6 grid gap-3 md:grid-cols-2">{projects.length === 0 ? <div className="rounded-[24px] border border-dashed border-white/15 p-6 text-sm leading-6 text-mist/45">Сохранённых проектов пока нет.</div> : projects.map((project) => <button key={project.id} onClick={() => onOpen(project)} className="clay-inset min-w-0 rounded-[24px] p-5 text-left transition hover:border-signal/30"><div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3"><FolderOpen className="text-signal" size={20} /><div className="min-w-0"><h2 className="break-words text-xl font-semibold leading-7">{project.name}</h2><p className="mt-2 break-words text-sm leading-6 text-mist/50">{project.region}</p></div><span className="status-chip">{project.status}</span></div><p className="mt-4 text-xs leading-5 text-mist/40">Документов: {project.gi_project_documents?.length ?? 0} · Проверок: {project.gi_project_checks?.length ?? 0}</p></button>)}</div><button className="secondary-cta mt-6" onClick={onRefresh}><RefreshCw size={15} /> Обновить список</button></section></div></main>;
 }
 
-function WorkspaceStepper({ active }: { active: number }) {
+function WorkspaceStepper({ active, current, onSelect }: { active: number; current: number; onSelect: (step: number) => void }) {
   const steps = [
     ["Профиль", "Данные проекта"],
     ["Документы", "Файлы и факты"],
     ["Результат", "Меры и маршрут"],
   ];
-  return <div className="workspace-stepper mt-6">{steps.map(([title, detail], index) => { const number = index + 1; const enabled = number <= active; return <div key={title} className={`workspace-step ${enabled ? "workspace-step-active" : ""}`}><span className="workspace-step-number">{number}</span><div className="mt-2 min-w-0"><p className="font-medium leading-5">{title}</p><p className="mt-1 text-[10px] leading-4 text-mist/40">{detail}</p></div></div>; })}</div>;
+  return (
+    <div className="workspace-stepper mt-6">
+      {steps.map(([title, detail], index) => {
+        const number = index + 1;
+        const enabled = number <= active;
+        const className = `workspace-step w-full text-left transition ${enabled ? "workspace-step-active" : ""} ${number === current ? "ring-2 ring-signal/50" : ""}`;
+        const content = (
+          <>
+            <span className="workspace-step-number">{number}</span>
+            <div className="mt-2 min-w-0">
+              <p className="font-medium leading-5">{title}</p>
+              <p className="mt-1 text-[10px] leading-4 text-mist/40">{detail}</p>
+            </div>
+          </>
+        );
+        return enabled
+          ? <button key={title} type="button" className={className} onClick={() => onSelect(number)}>{content}</button>
+          : <div key={title} className={className}>{content}</div>;
+      })}
+    </div>
+  );
 }
 
 function SectionHeading({ icon, title, subtitle }: { icon: React.ReactNode; title: string; subtitle: string }) {
