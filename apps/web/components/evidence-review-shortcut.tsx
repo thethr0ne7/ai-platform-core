@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Database, ShieldCheck } from "lucide-react";
+import { BrainCircuit, Database, ShieldCheck } from "lucide-react";
 import { getEvidenceReviewerStatus } from "../lib/evidence-review";
 
 export function EvidenceReviewShortcut() {
@@ -29,6 +29,12 @@ export function EvidenceReviewShortcut() {
 
   return (
     <div className="fixed bottom-4 right-3 z-[60] flex max-w-[calc(100vw-1.5rem)] flex-col items-end gap-2 sm:right-5">
+      <a
+        href="/control-center"
+        className="inline-flex min-h-11 items-center gap-2 rounded-[18px] border border-white/10 bg-ink/95 px-4 py-3 text-xs font-semibold text-mist shadow-2xl backdrop-blur"
+      >
+        <BrainCircuit size={16} /> Аналитическое ядро
+      </a>
       <a
         href="/catalogue-control"
         className="inline-flex min-h-11 items-center gap-2 rounded-[18px] border border-white/10 bg-ink/95 px-4 py-3 text-xs font-semibold text-mist shadow-2xl backdrop-blur"
