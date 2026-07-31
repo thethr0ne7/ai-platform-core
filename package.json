@@ -18,12 +18,16 @@
     "build": "tsc",
     "build:info": "tsx scripts/generate-build-info.ts",
     "web:check": "npm --workspace @thr0ne7/web run check",
+    "web:lint": "npm --workspace @thr0ne7/web run lint",
     "web:build": "npm --workspace @thr0ne7/web run build",
-    "platform:verify": "npm run verify && npm run web:check && npm run web:build"
+    "platform:verify": "npm run verify && npm run web:check && npm run web:lint && npm run web:build"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"
+  },
+  "overrides": {
+    "brace-expansion": "^5.0.9"
   }
 }

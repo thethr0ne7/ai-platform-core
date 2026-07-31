@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
@@ -115,7 +116,7 @@ export function EvidenceReviewWorkspace() {
               <p className="mt-3 max-w-3xl text-sm leading-6 text-mist/55">Машина ищет буквальное совпадение в сохранённой Tier A версии. Но статус «подтверждено» возникает только после реального решения эксперта, точной цитаты и locator.</p>
             </div>
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
-              <a href="/" className="secondary-cta"><ArrowLeft size={15} /> К проектам</a>
+              <Link href="/" className="secondary-cta"><ArrowLeft size={15} /> К проектам</Link>
               <button className="primary-cta" disabled={busy} onClick={() => void load()}>{busy ? <LoaderCircle className="animate-spin" size={15} /> : <RefreshCw size={15} />} Обновить</button>
             </div>
           </div>
@@ -262,7 +263,7 @@ function LoadingScreen() {
 }
 
 function AccessDenied({ message, onRetry }: { message: string; onRetry: () => void }) {
-  return <main className="app-shell"><div className="mx-auto min-h-screen max-w-3xl px-4 py-8"><section className="glass-surface rounded-[28px] p-6 sm:p-10"><Ban className="text-signal" size={28} /><h1 className="mt-5 text-3xl font-semibold">Нет экспертного доступа</h1><p className="mt-4 text-sm leading-6 text-mist/55">{message}</p><div className="mt-6 grid gap-2 sm:grid-cols-2"><a className="secondary-cta" href="/"><ArrowLeft size={15} /> К проектам</a><button className="primary-cta" onClick={onRetry}><RefreshCw size={15} /> Проверить снова</button></div></section></div></main>;
+  return <main className="app-shell"><div className="mx-auto min-h-screen max-w-3xl px-4 py-8"><section className="glass-surface rounded-[28px] p-6 sm:p-10"><Ban className="text-signal" size={28} /><h1 className="mt-5 text-3xl font-semibold">Нет экспертного доступа</h1><p className="mt-4 text-sm leading-6 text-mist/55">{message}</p><div className="mt-6 grid gap-2 sm:grid-cols-2"><Link className="secondary-cta" href="/"><ArrowLeft size={15} /> К проектам</Link><button className="primary-cta" onClick={onRetry}><RefreshCw size={15} /> Проверить снова</button></div></section></div></main>;
 }
 
 function roleLabel(role: string | null | undefined) {

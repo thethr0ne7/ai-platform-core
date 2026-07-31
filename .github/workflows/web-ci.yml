@@ -25,5 +25,8 @@ jobs:
       - name: Typecheck web
         run: npm --workspace @thr0ne7/web run check
 
+      - name: Lint web
+        run: npm --workspace @thr0ne7/web run lint
+
       - name: Build web
         run: npm --workspace @thr0ne7/web run build
