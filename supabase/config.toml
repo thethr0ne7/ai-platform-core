@@ -1,0 +1,37 @@
+project_id = "hgivyjjethjwswjrvroy"
+
+# Every function here authenticates callers itself (Telegram initData HMAC,
+# or an internal scheduler token) rather than relying on Supabase's own
+# Authorization-header JWT gate, so verify_jwt is explicitly false to match
+# what is actually running in production. Do not flip these to true without
+# also updating every caller to send a Supabase JWT.
+
+[functions.catalogue-control]
+verify_jwt = false
+
+[functions.evidence-review]
+verify_jwt = false
+
+[functions.evidence-source-processor]
+verify_jwt = false
+
+[functions.government-opportunity-api]
+verify_jwt = false
+
+[functions.legal-ocr-broker]
+verify_jwt = false
+
+[functions.measure-direction-enrichment]
+verify_jwt = false
+
+[functions.official-source-ingestion]
+verify_jwt = false
+
+[functions.project-document-processor]
+verify_jwt = false
+
+[functions.project-fact-review]
+verify_jwt = false
+
+[functions.telegram-project-api]
+verify_jwt = false
