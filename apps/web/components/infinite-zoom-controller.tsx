@@ -1,64 +1,71 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import {
-  ChevronLeft,
-  ChevronRight,
+  BadgeCheck,
+  BriefcaseBusiness,
   FileText,
-  Gauge,
   Landmark,
-  Layers3,
-  ListTree,
   Route,
-  ShieldCheck,
 } from "lucide-react";
 
 const layers = [
   {
     id: "report-summary",
-    title: "Итог",
-    subtitle: "Главный вывод и готовность",
-    icon: Gauge,
-  },
-  {
-    id: "report-measures",
-    title: "Меры",
-    subtitle: "Поддержка, блокеры и сценарии",
-    icon: Landmark,
+    title: "Проект",
+    subtitle: "Состояние проекта и главный вывод",
+    icon: BriefcaseBusiness,
   },
   {
     id: "report-documents",
     title: "Документы",
-    subtitle: "Файлы и подтверждённые факты",
+    subtitle: "Файлы и обработка материалов",
     icon: FileText,
   },
   {
     id: "report-evidence",
-    title: "Доказательства",
-    subtitle: "Источники, изменения и сигналы",
-    icon: ShieldCheck,
+    title: "Факты",
+    subtitle: "Подтверждения, источники и проверки",
+    icon: BadgeCheck,
+  },
+  {
+    id: "report-measures",
+    title: "Меры",
+    subtitle: "Поддержка, требования и блокеры",
+    icon: Landmark,
   },
   {
     id: "report-actions",
     title: "Действия",
-    subtitle: "Маршрут, возможности и источники",
+    subtitle: "Следующие шаги и маршрут проекта",
     icon: Route,
   },
 ] as const;
 
 type LayerId = (typeof layers)[number]["id"];
 
+const clamp = (value: number, min: number, max: number) =>
+  Math.min(max, Math.max(min, value));
+
 export function InfiniteZoomController() {
   const [workspace, setWorkspace] = useState<HTMLElement | null>(null);
   const [mountNode, setMountNode] = useState<HTMLDivElement | null>(null);
   const [activeLayer, setActiveLayer] = useState<LayerId>("report-summary");
-  const [mapOpen, setMapOpen] = useState(false);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const dockRef = useRef<HTMLDivElement | null>(null);
+  const pointerIdRef = useRef<number | null>(null);
 
   useEffect(() => {
     const locateWorkspace = () => {
       const next = document.querySelector<HTMLElement>(".report-workspace");
-      setWorkspace((current) => current === next ? current : next);
+      setWorkspace((current) => (current === next ? current : next));
     };
 
     locateWorkspace();
@@ -81,7 +88,11 @@ export function InfiniteZoomController() {
     const hash = window.location.hash.slice(1) as LayerId;
     if (layers.some((layer) => layer.id === hash)) setActiveLayer(hash);
 
+    const previousPaddingBottom = workspace.style.paddingBottom;
+    workspace.style.paddingBottom = "calc(8.25rem + env(safe-area-inset-bottom))";
+
     return () => {
+      workspace.style.paddingBottom = previousPaddingBottom;
       node.remove();
       setMountNode(null);
     };
@@ -99,13 +110,18 @@ export function InfiniteZoomController() {
         return !element.dataset.infiniteZoomController && element !== originalNavigation;
       }) as HTMLElement[];
 
-      const startIndexes = layers.map((layer) => {
-        const anchor = workspace.querySelector<HTMLElement>(`#${layer.id}`);
-        return anchor ? contentChildren.indexOf(anchor) : -1;
-      });
-      const activeIndex = layers.findIndex((layer) => layer.id === activeLayer);
-      const start = startIndexes[activeIndex];
-      const nextStart = startIndexes.slice(activeIndex + 1).find((index) => index >= 0) ?? contentChildren.length;
+      const anchorIndexes = layers
+        .map((layer) => {
+          const anchor = workspace.querySelector<HTMLElement>(`#${layer.id}`);
+          return anchor ? contentChildren.indexOf(anchor) : -1;
+        })
+        .filter((index) => index >= 0);
+
+      const activeAnchor = workspace.querySelector<HTMLElement>(`#${activeLayer}`);
+      const start = activeAnchor ? contentChildren.indexOf(activeAnchor) : -1;
+      const nextStart = anchorIndexes
+        .filter((index) => index > start)
+        .sort((a, b) => a - b)[0] ?? contentChildren.length;
 
       contentChildren.forEach((element, index) => {
         element.hidden = start < 0 ? false : index < start || index >= nextStart;
@@ -130,11 +146,16 @@ export function InfiniteZoomController() {
     () => Math.max(0, layers.findIndex((layer) => layer.id === activeLayer)),
     [activeLayer],
   );
+  const displayIndex = dragIndex ?? currentIndex;
   const current = layers[currentIndex];
+  const markerLayer = layers[displayIndex];
+  const markerLeft = `${((displayIndex + 0.5) / layers.length) * 100}%`;
+  const notchCenter = 50 + displayIndex * 100;
+  const notchPath = `M 24 18 H ${notchCenter - 38} C ${notchCenter - 24} 18 ${notchCenter - 30} 56 ${notchCenter} 56 C ${notchCenter + 30} 56 ${notchCenter + 24} 18 ${notchCenter + 38} 18 H 476 Q 488 18 488 30 V 78 Q 488 90 476 90 H 24 Q 12 90 12 78 V 30 Q 12 18 24 18 Z`;
 
   const selectLayer = useCallback((id: LayerId) => {
     setActiveLayer(id);
-    setMapOpen(false);
+    setDragIndex(null);
     window.history.replaceState(null, "", `#${id}`);
     window.requestAnimationFrame(() => {
       document.querySelector<HTMLElement>(".report-workspace")?.scrollIntoView({
@@ -144,12 +165,42 @@ export function InfiniteZoomController() {
     });
   }, []);
 
+  const indexFromPointer = useCallback((clientX: number) => {
+    const dock = dockRef.current;
+    if (!dock) return currentIndex;
+    const rect = dock.getBoundingClientRect();
+    const ratio = clamp((clientX - rect.left) / Math.max(rect.width, 1), 0, 0.9999);
+    return clamp(Math.floor(ratio * layers.length), 0, layers.length - 1);
+  }, [currentIndex]);
+
+  const handleMarkerPointerDown = useCallback((event: React.PointerEvent<HTMLButtonElement>) => {
+    pointerIdRef.current = event.pointerId;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setDragIndex(indexFromPointer(event.clientX));
+  }, [indexFromPointer]);
+
+  const handleMarkerPointerMove = useCallback((event: React.PointerEvent<HTMLButtonElement>) => {
+    if (pointerIdRef.current !== event.pointerId) return;
+    setDragIndex(indexFromPointer(event.clientX));
+  }, [indexFromPointer]);
+
+  const commitMarker = useCallback((event: React.PointerEvent<HTMLButtonElement>) => {
+    if (pointerIdRef.current !== event.pointerId) return;
+    const nextIndex = indexFromPointer(event.clientX);
+    pointerIdRef.current = null;
+    setDragIndex(null);
+    selectLayer(layers[nextIndex].id);
+  }, [indexFromPointer, selectLayer]);
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (!workspace) return;
-      if (event.key === "Escape") setMapOpen(false);
-      if (event.key === "ArrowLeft" && currentIndex > 0) selectLayer(layers[currentIndex - 1].id);
-      if (event.key === "ArrowRight" && currentIndex < layers.length - 1) selectLayer(layers[currentIndex + 1].id);
+      if (event.key === "ArrowLeft" && currentIndex > 0) {
+        selectLayer(layers[currentIndex - 1].id);
+      }
+      if (event.key === "ArrowRight" && currentIndex < layers.length - 1) {
+        selectLayer(layers[currentIndex + 1].id);
+      }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -157,83 +208,81 @@ export function InfiniteZoomController() {
 
   if (!workspace || !mountNode) return null;
 
-  const CurrentIcon = current.icon;
+  const MarkerIcon = markerLayer.icon;
 
   return createPortal(
-    <div className="sticky top-2 z-50 mb-3 min-w-0" aria-label="Масштаб отчёта">
-      <div className="glass-surface rounded-[24px] p-2 shadow-2xl backdrop-blur-xl">
-        <div className="grid grid-cols-[44px_minmax(0,1fr)_44px] items-center gap-2">
-          <button
-            type="button"
-            className="icon-button h-11 w-11 rounded-[16px] disabled:opacity-30"
-            disabled={currentIndex === 0}
-            onClick={() => selectLayer(layers[currentIndex - 1].id)}
-            aria-label="Предыдущий уровень"
-          >
-            <ChevronLeft size={18} />
-          </button>
-
-          <button
-            type="button"
-            className="min-w-0 rounded-[18px] border border-signal/20 bg-signal/[.065] px-3 py-2.5 text-left"
-            onClick={() => setMapOpen((value) => !value)}
-            aria-expanded={mapOpen}
-          >
-            <span className="flex min-w-0 items-center gap-2.5">
-              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[14px] bg-signal text-ink">
-                <CurrentIcon size={17} />
-              </span>
-              <span className="min-w-0">
-                <span className="block text-[10px] font-medium text-signal">Уровень {currentIndex + 1} из {layers.length}</span>
-                <span className="block truncate text-sm font-semibold text-mist">{current.title}</span>
-              </span>
-              <Layers3 className="ml-auto shrink-0 text-mist/40" size={17} />
-            </span>
-          </button>
-
-          <button
-            type="button"
-            className="icon-button h-11 w-11 rounded-[16px] disabled:opacity-30"
-            disabled={currentIndex === layers.length - 1}
-            onClick={() => selectLayer(layers[currentIndex + 1].id)}
-            aria-label="Следующий уровень"
-          >
-            <ChevronRight size={18} />
-          </button>
+    <nav
+      className="pointer-events-none fixed inset-x-0 bottom-0 z-[65] mx-auto max-w-3xl px-3 pb-[max(.55rem,env(safe-area-inset-bottom))]"
+      aria-label="Этапы проекта"
+    >
+      <div className="pointer-events-auto mx-auto max-w-xl">
+        <div
+          aria-live="polite"
+          className="mx-auto mb-1.5 w-fit max-w-[calc(100vw-2rem)] truncate rounded-full border border-mist/[.08] bg-ink/90 px-3 py-1.5 text-[10px] text-mist/55 shadow-lg backdrop-blur-xl"
+        >
+          Этап {currentIndex + 1} из {layers.length} · <span className="font-semibold text-mist">{current.title}</span> · {current.subtitle}
         </div>
 
-        {mapOpen ? (
-          <div className="mt-2 rounded-[20px] border border-mist/[.08] bg-ink/95 p-2">
-            <div className="mb-2 flex items-center gap-2 px-2 py-1 text-[10px] font-medium text-mist/40">
-              <ListTree size={14} /> Карта отчёта
-            </div>
-            <div className="grid gap-1.5 sm:grid-cols-5">
-              {layers.map((layer, index) => {
-                const Icon = layer.icon;
-                const selected = layer.id === activeLayer;
-                return (
-                  <button
-                    key={layer.id}
-                    type="button"
-                    onClick={() => selectLayer(layer.id)}
-                    className={`grid min-w-0 grid-cols-[36px_minmax(0,1fr)] items-center gap-2 rounded-[16px] border px-2.5 py-2.5 text-left transition ${selected ? "border-signal/30 bg-signal/[.09]" : "border-transparent bg-mist/[.025] hover:border-mist/[.08]"}`}
-                  >
-                    <span className={`grid h-9 w-9 place-items-center rounded-[13px] ${selected ? "bg-signal text-ink" : "bg-mist/[.05] text-mist/50"}`}>
-                      <Icon size={16} />
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block text-[9px] text-mist/35">0{index + 1}</span>
-                      <span className="block truncate text-xs font-medium text-mist">{layer.title}</span>
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-            <p className="px-2 pb-1 pt-2 text-[10px] leading-4 text-mist/35">Показывается только выбранный слой. Детали не конкурируют за экран и не перекрывают управление.</p>
+        <div ref={dockRef} className="relative h-[104px] select-none">
+          <svg
+            className="absolute inset-0 h-full w-full overflow-visible text-ink drop-shadow-2xl"
+            viewBox="0 0 500 104"
+            preserveAspectRatio="none"
+            aria-hidden="true"
+          >
+            <path
+              d={notchPath}
+              fill="rgba(8, 11, 9, 0.96)"
+              stroke="rgba(255, 255, 255, 0.14)"
+              strokeWidth="1.2"
+              vectorEffect="non-scaling-stroke"
+              style={{ transition: "d 280ms cubic-bezier(.2,.8,.2,1)" }}
+            />
+          </svg>
+
+          <div className="absolute inset-x-0 top-[20px] grid h-[74px] grid-cols-5 px-1">
+            {layers.map((layer, index) => {
+              const Icon = layer.icon;
+              const selected = index === currentIndex;
+              return (
+                <button
+                  key={layer.id}
+                  type="button"
+                  onClick={() => selectLayer(layer.id)}
+                  className="group flex min-w-0 flex-col items-center justify-end gap-1 pb-2 text-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal"
+                  aria-current={selected ? "step" : undefined}
+                  aria-label={`${index + 1}. ${layer.title}`}
+                >
+                  <Icon
+                    size={18}
+                    className={`transition ${selected ? "opacity-0" : "text-mist/45 group-hover:text-mist/75"}`}
+                  />
+                  <span className={`w-full truncate px-0.5 text-[9px] font-medium transition ${selected ? "text-signal" : "text-mist/38"}`}>
+                    {layer.title}
+                  </span>
+                </button>
+              );
+            })}
           </div>
-        ) : null}
+
+          <button
+            type="button"
+            className="absolute top-0 grid h-14 w-14 -translate-x-1/2 touch-none place-items-center rounded-full border border-signal/60 bg-signal text-ink shadow-[0_0_0_5px_rgba(8,11,9,.94),0_12px_34px_rgba(170,255,40,.32)] transition-[left,transform] duration-300 active:scale-95"
+            style={{ left: markerLeft, touchAction: "none" }}
+            onPointerDown={handleMarkerPointerDown}
+            onPointerMove={handleMarkerPointerMove}
+            onPointerUp={commitMarker}
+            onPointerCancel={() => {
+              pointerIdRef.current = null;
+              setDragIndex(null);
+            }}
+            aria-label={`Текущий этап: ${markerLayer.title}. Перетащите для перехода.`}
+          >
+            <MarkerIcon size={21} />
+          </button>
+        </div>
       </div>
-    </div>,
+    </nav>,
     mountNode,
   );
 }
