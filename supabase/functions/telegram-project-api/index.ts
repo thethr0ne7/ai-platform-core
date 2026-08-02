@@ -7,6 +7,8 @@ const DEFAULT_ALLOWED_ORIGINS = new Set([
   "https://web.telegram.org",
 ]);
 
+const PROJECT_VERCEL_ORIGIN = /^https:\/\/ai-platform-core(?:-[a-z0-9-]+)?-63-gginner\.vercel\.app$/;
+
 type TelegramUser = {
   id: number;
   first_name: string;
@@ -65,7 +67,7 @@ function safeFileName(name: string) {
 
 Deno.serve(async (req) => {
   const origin = req.headers.get("origin");
-  if (origin && !allowedOrigins().has(origin)) {
+  if (origin && !isAllowedOrigin(origin)) {
     return json(req, { error: "origin_not_allowed" }, 403);
   }
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders(req) });
@@ -240,12 +242,17 @@ Deno.serve(async (req) => {
   }
 });
 
-function allowedOrigins(): Set<string> {
-  const configured = (Deno.env.get("ALLOWED_ORIGINS") ?? "")
+function configuredOrigins(): Set<string> {
+  return new Set((Deno.env.get("ALLOWED_ORIGINS") ?? "")
     .split(",")
     .map((value) => value.trim())
-    .filter(Boolean);
-  return new Set([...DEFAULT_ALLOWED_ORIGINS, ...configured]);
+    .filter(Boolean));
+}
+
+function isAllowedOrigin(origin: string): boolean {
+  return DEFAULT_ALLOWED_ORIGINS.has(origin)
+    || configuredOrigins().has(origin)
+    || PROJECT_VERCEL_ORIGIN.test(origin);
 }
 
 function corsHeaders(request: Request): Record<string, string> {
@@ -256,7 +263,7 @@ function corsHeaders(request: Request): Record<string, string> {
     "access-control-max-age": "86400",
     vary: "Origin",
   };
-  if (origin && allowedOrigins().has(origin)) headers["access-control-allow-origin"] = origin;
+  if (origin && isAllowedOrigin(origin)) headers["access-control-allow-origin"] = origin;
   return headers;
 }
 
