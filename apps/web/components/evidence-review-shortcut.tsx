@@ -34,6 +34,7 @@ const destinations = [
 export function EvidenceReviewShortcut() {
   const [visible, setVisible] = useState(false);
   const [open, setOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -54,6 +55,18 @@ export function EvidenceReviewShortcut() {
   }, []);
 
   useEffect(() => {
+    const detectReport = () => {
+      const next = Boolean(document.querySelector(".report-workspace"));
+      setReportOpen((current) => (current === next ? current : next));
+    };
+
+    detectReport();
+    const observer = new MutationObserver(detectReport);
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
     if (!open) return;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -70,7 +83,7 @@ export function EvidenceReviewShortcut() {
   }, [open]);
 
   useEffect(() => {
-    if (!visible) return;
+    if (!visible || reportOpen) return;
 
     const mobile = window.matchMedia("(max-width: 639px)");
     const originalPadding = new Map<HTMLElement, string>();
@@ -104,9 +117,13 @@ export function EvidenceReviewShortcut() {
       mobile.removeEventListener("change", applyClearance);
       restore();
     };
-  }, [visible]);
+  }, [reportOpen, visible]);
 
-  if (!visible) return null;
+  useEffect(() => {
+    if (reportOpen && open) setOpen(false);
+  }, [open, reportOpen]);
+
+  if (!visible || reportOpen) return null;
 
   return (
     <>
