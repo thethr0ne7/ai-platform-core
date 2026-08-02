@@ -69,6 +69,43 @@ export function EvidenceReviewShortcut() {
     };
   }, [open]);
 
+  useEffect(() => {
+    if (!visible) return;
+
+    const mobile = window.matchMedia("(max-width: 639px)");
+    const originalPadding = new Map<HTMLElement, string>();
+
+    const restore = () => {
+      originalPadding.forEach((value, element) => {
+        element.style.paddingBottom = value;
+      });
+      originalPadding.clear();
+    };
+
+    const applyClearance = () => {
+      if (!mobile.matches) {
+        restore();
+        return;
+      }
+
+      document.querySelectorAll<HTMLElement>("main.app-shell > div").forEach((element) => {
+        if (!originalPadding.has(element)) originalPadding.set(element, element.style.paddingBottom);
+        element.style.paddingBottom = "calc(6rem + env(safe-area-inset-bottom))";
+      });
+    };
+
+    applyClearance();
+    const observer = new MutationObserver(applyClearance);
+    observer.observe(document.body, { childList: true, subtree: true });
+    mobile.addEventListener("change", applyClearance);
+
+    return () => {
+      observer.disconnect();
+      mobile.removeEventListener("change", applyClearance);
+      restore();
+    };
+  }, [visible]);
+
   if (!visible) return null;
 
   return (
