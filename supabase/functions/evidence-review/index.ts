@@ -14,11 +14,11 @@ type RequestPayload = {
   limit?: number;
 };
 
-const cors = {
-  "access-control-allow-origin": "*",
-  "access-control-allow-headers": "content-type,authorization,apikey,x-client-info",
-  "access-control-allow-methods": "POST,OPTIONS",
-};
+const DEFAULT_ALLOWED_ORIGINS = new Set([
+  "https://ai-platform-core.vercel.app",
+  "https://ai-platform-core-63-gginner.vercel.app",
+  "https://web.telegram.org",
+]);
 
 const SUPABASE_URL = mustEnv("SUPABASE_URL");
 const SERVICE_ROLE_KEY = mustEnv("SUPABASE_SERVICE_ROLE_KEY");
@@ -28,21 +28,30 @@ const db = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
 });
 
 Deno.serve(async (request: Request) => {
-  if (request.method === "OPTIONS") return new Response("ok", { headers: cors });
-  if (request.method !== "POST") return json({ error: "method_not_allowed" }, 405);
+  const origin = request.headers.get("origin");
+  if (origin && !isAllowedOrigin(origin)) {
+    return json(request, { error: "origin_not_allowed" }, 403);
+  }
+
+  if (request.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders(request) });
+  }
+  if (request.method !== "POST") return json(request, { error: "method_not_allowed" }, 405);
 
   try {
     const payload = await request.json() as RequestPayload;
     const userId = await authenticateTelegram(payload.initData);
-    if (!userId) return json({ error: "telegram_auth_failed" }, 401);
+    if (!userId) return json(request, { error: "telegram_auth_failed" }, 401);
 
     const reviewer = await getReviewer(userId);
     if (payload.action === "status") {
-      if (!reviewer) return json({ authorized: false, role: null, summary: emptySummary() });
-      return json({ authorized: true, role: reviewer.role, summary: await getSummary() });
+      if (!reviewer) {
+        return json(request, { authorized: false, role: null, summary: emptySummary() });
+      }
+      return json(request, { authorized: true, role: reviewer.role, summary: await getSummary() });
     }
 
-    if (!reviewer) return json({ error: "evidence_reviewer_not_allowed" }, 403);
+    if (!reviewer) return json(request, { error: "evidence_reviewer_not_allowed" }, 403);
 
     if (payload.action === "list") {
       const limit = Math.max(1, Math.min(Number(payload.limit ?? 50), 100));
@@ -51,22 +60,22 @@ Deno.serve(async (request: Request) => {
         p_limit: limit,
       });
       if (error) throw error;
-      return json({ tasks: data ?? [], summary: await getSummary(), role: reviewer.role });
+      return json(request, { tasks: data ?? [], summary: await getSummary(), role: reviewer.role });
     }
 
     if (payload.action === "review") {
       const taskId = String(payload.taskId ?? "");
       const decision = payload.decision;
       if (!taskId || !decision || !["verified", "rejected", "blocked", "reopened"].includes(decision)) {
-        return json({ error: "invalid_evidence_review_request" }, 400);
+        return json(request, { error: "invalid_evidence_review_request" }, 400);
       }
 
       if (decision === "verified") {
         if (String(payload.quote ?? "").trim().length < 40) {
-          return json({ error: "verification_requires_exact_quote" }, 400);
+          return json(request, { error: "verification_requires_exact_quote" }, 400);
         }
         if (String(payload.locator ?? "").trim().length < 8) {
-          return json({ error: "verification_requires_locator" }, 400);
+          return json(request, { error: "verification_requires_locator" }, 400);
         }
       }
 
@@ -79,13 +88,13 @@ Deno.serve(async (request: Request) => {
         p_notes: String(payload.notes ?? "") || null,
       });
       if (error) throw error;
-      return json({ review: data, summary: await getSummary() });
+      return json(request, { review: data, summary: await getSummary() });
     }
 
-    return json({ error: "unknown_action" }, 400);
+    return json(request, { error: "unknown_action" }, 400);
   } catch (error) {
     const message = error instanceof Error ? error.message : "evidence_review_failed";
-    return json({ error: normalizeError(message) }, 400);
+    return json(request, { error: normalizeError(message) }, 400);
   }
 });
 
@@ -178,15 +187,56 @@ function normalizeError(message: string) {
   return known.find((item) => message.includes(item)) ?? message;
 }
 
+function configuredOrigins(): Set<string> {
+  const configured = (Deno.env.get("ALLOWED_ORIGINS") ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  return new Set([...DEFAULT_ALLOWED_ORIGINS, ...configured]);
+}
+
+function isAllowedOrigin(origin: string): boolean {
+  if (configuredOrigins().has(origin)) return true;
+
+  try {
+    const url = new URL(origin);
+    return url.protocol === "https:"
+      && url.hostname.startsWith("ai-platform-core-")
+      && url.hostname.endsWith("-63-gginner.vercel.app");
+  } catch {
+    return false;
+  }
+}
+
+function corsHeaders(request: Request): Record<string, string> {
+  const origin = request.headers.get("origin");
+  const headers: Record<string, string> = {
+    "access-control-allow-headers": "content-type,authorization,apikey,x-client-info",
+    "access-control-allow-methods": "POST,OPTIONS",
+    "access-control-max-age": "86400",
+    vary: "Origin",
+  };
+
+  if (origin && isAllowedOrigin(origin)) {
+    headers["access-control-allow-origin"] = origin;
+  }
+  return headers;
+}
+
 function mustEnv(name: string): string {
   const value = Deno.env.get(name);
   if (!value) throw new Error(`Missing environment variable ${name}`);
   return value;
 }
 
-function json(payload: unknown, status = 200) {
+function json(request: Request, payload: unknown, status = 200) {
   return new Response(JSON.stringify(payload), {
     status,
-    headers: { ...cors, "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
+    headers: {
+      ...corsHeaders(request),
+      "content-type": "application/json; charset=utf-8",
+      "cache-control": "no-store, private",
+      "x-content-type-options": "nosniff",
+    },
   });
 }
