@@ -76,7 +76,7 @@ export function EvidenceReviewShortcut() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="fixed bottom-[max(.75rem,env(safe-area-inset-bottom))] right-3 z-[70] grid h-13 w-13 place-items-center rounded-[20px] border border-signal/35 bg-signal text-ink shadow-2xl transition active:scale-95 sm:right-5 sm:flex sm:h-12 sm:w-auto sm:gap-2 sm:px-4"
+        className="fixed bottom-[max(.75rem,env(safe-area-inset-bottom))] right-3 z-[70] grid h-[52px] w-[52px] place-items-center rounded-[20px] border border-signal/35 bg-signal text-ink shadow-2xl transition active:scale-95 sm:right-5 sm:flex sm:h-12 sm:w-auto sm:gap-2 sm:px-4"
         aria-label="Открыть экспертный контур"
         aria-expanded={open}
       >
