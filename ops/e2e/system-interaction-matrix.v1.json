@@ -1,0 +1,77 @@
+{
+  "schema_version": "1.1.0",
+  "audit_id": "system-interaction-audit-v1",
+  "control_point": "2026-08-03T01:41:00+03:00",
+  "repository": "thethr0ne7/ai-platform-core",
+  "production": {
+    "vercel_commit": "6695250fb5272e7268227bac39277dfdd64e441a",
+    "supabase_project_id": "hgivyjjethjwswjrvroy",
+    "edge_function_count": 22,
+    "telegram_project_api_version": 6
+  },
+  "status_enum": ["PASS", "PARTIAL", "FAIL", "SKIP"],
+  "common_contract": {
+    "downstream_trigger": "Observe defined transition from existing rows, logs and contracts only.",
+    "timeout": "Classify stale work from persisted timestamps and layer-specific thresholds.",
+    "retry": "Observe retry state; never initiate retry.",
+    "idempotency": "Detect duplicates, null provenance and relational mismatches.",
+    "observability": "Supabase rows, Edge logs, Vercel status and repository contracts.",
+    "rollback": "None: probes are read-only."
+  },
+  "probe_modes": {
+    "transport_trace": "HEAD/OPTIONS plus persisted traces; never replays Telegram authentication.",
+    "evidence_query": "GET/select existing production evidence only.",
+    "integrity_query": "Read-only relational integrity check.",
+    "edge_log_trace": "Observe existing Edge Function traces without triggering work.",
+    "contract_and_trace": "Inspect static contract plus existing traces.",
+    "contract_only": "Static contract inspection only."
+  },
+  "release_gates": {
+    "A": {
+      "name": "Transactional Core",
+      "required_probes": ["P01", "P02", "P03", "P04", "P05", "P06", "P07", "P08", "P09", "P10", "P11", "P12"],
+      "pass_rule": "No blocker FAIL. P01 and P03 may remain PARTIAL until an isolated synthetic write test exists."
+    },
+    "B": {
+      "name": "Evidence Core",
+      "required_probes": ["P13", "P14", "P15", "P16"],
+      "pass_rule": "All blocker probes PASS; verified evidence and verified requirements are non-zero."
+    },
+    "C": {
+      "name": "Intelligence Core",
+      "required_probes": ["P17", "P18", "P19", "P20"],
+      "pass_rule": "All probes PASS and at least one controlled Decision Card passes Truth Gate."
+    },
+    "D": {
+      "name": "Forecast Core",
+      "required_probes": ["P21"],
+      "pass_rule": "Gate B and C pass first; forecasts retain evidence, assumptions, falsification conditions and engine version."
+    }
+  },
+  "probes": [
+    {"id":"P01","title":"Telegram initData → authenticated profile","gate":"A","severity":"blocker","source":"telegram","trigger":"telegram-project-api.authenticate","input":"telegram initData","auth":"Telegram HMAC + freshness","target":"gi_telegram_profiles","expected":"authenticated profile","mode":"transport_trace","initial_status":"SKIP","owner":"unassigned","issue":null},
+    {"id":"P02","title":"Profile → project creation","gate":"A","severity":"blocker","source":"gi_telegram_profiles","trigger":"telegram-project-api.save_project","input":"authenticated user + project payload","auth":"Telegram HMAC + ownership","target":"gi_projects","expected":"ready project linked to profile","mode":"integrity_query","initial_status":"SKIP","owner":"unassigned","issue":null},
+    {"id":"P03","title":"Project → signed upload URL","gate":"A","severity":"high","source":"gi_projects","trigger":"telegram-project-api.create_upload_url","input":"owned project + file name","auth":"Telegram HMAC + ownership","target":"storage signed URL","expected":"short-lived upload token","mode":"contract_and_trace","initial_status":"SKIP","owner":"unassigned","issue":null},
+    {"id":"P04","title":"Storage upload → document registration","gate":"A","severity":"blocker","source":"storage","trigger":"telegram-project-api.register_document","input":"uploaded object metadata","auth":"Telegram HMAC + ownership","target":"gi_project_documents","expected":"document linked to project and storage path","mode":"integrity_query","initial_status":"SKIP","owner":"unassigned","issue":null},
+    {"id":"P05","title":"Document registration → processing trigger","gate":"A","severity":"blocker","source":"gi_project_documents","trigger":"project-document-processor","input":"document id","auth":"service role / internal trigger","target":"processing function","expected":"accepted trace and later state","mode":"edge_log_trace","initial_status":"SKIP","owner":"unassigned","issue":null},
+    {"id":"P06","title":"Processing → parsed document and chunks","gate":"A","severity":"blocker","source":"project-document-processor","trigger":"parser pipeline","input":"registered document","auth":"internal","target":"gi_project_documents + gi_project_document_chunks","expected":"parsed document with linked chunks","mode":"integrity_query","initial_status":"SKIP","owner":"unassigned","issue":null},
+    {"id":"P07","title":"Chunks → fact candidates","gate":"A","severity":"high","source":"gi_project_document_chunks","trigger":"fact extraction","input":"parsed chunks","auth":"internal","target":"gi_project_fact_candidates","expected":"candidates linked to document/project","mode":"integrity_query","initial_status":"SKIP","owner":"unassigned","issue":null},
+    {"id":"P08","title":"Fact confirmation → verified project facts","gate":"A","severity":"blocker","source":"gi_project_fact_candidates","trigger":"project-fact-review","input":"candidate decision","auth":"Telegram HMAC / reviewer context","target":"gi_project_facts","expected":"verified facts linked to project/source document","mode":"integrity_query","initial_status":"SKIP","owner":"unassigned","issue":null},
+    {"id":"P09","title":"Project facts → project check","gate":"A","severity":"blocker","source":"gi_project_facts","trigger":"government-opportunity-api","input":"owned project id","auth":"Telegram HMAC + ownership","target":"gi_project_checks","expected":"check linked to project","mode":"integrity_query","initial_status":"SKIP","owner":"unassigned","issue":null},
+    {"id":"P10","title":"Project check → measure matching","gate":"A","severity":"blocker","source":"gi_project_checks","trigger":"matching engine","input":"check + facts + requirements","auth":"internal","target":"gi_project_measure_matches","expected":"matches linked to check and measure","mode":"integrity_query","initial_status":"SKIP","owner":"unassigned","issue":111},
+    {"id":"P11","title":"Check → completed report","gate":"A","severity":"blocker","source":"gi_project_checks","trigger":"report generation","input":"check id","auth":"internal","target":"gi_project_reports","expected":"report linked to same project/check","mode":"integrity_query","initial_status":"SKIP","owner":"unassigned","issue":null},
+    {"id":"P12","title":"Report → actionable tasks","gate":"A","severity":"high","source":"gi_project_reports","trigger":"roadmap generation","input":"report id","auth":"internal","target":"gi_project_tasks","expected":"tasks linked to same project/report","mode":"integrity_query","initial_status":"SKIP","owner":"unassigned","issue":null},
+    {"id":"P13","title":"Official source → source version","gate":"B","severity":"blocker","source":"gi_official_sources","trigger":"official-source-ingestion","input":"active source","auth":"internal / operator","target":"gi_source_documents + gi_source_versions","expected":"versioned source snapshot","mode":"evidence_query","initial_status":"SKIP","owner":"unassigned","issue":null},
+    {"id":"P14","title":"Source version → evidence record","gate":"B","severity":"blocker","source":"gi_source_versions","trigger":"evidence-source-processor","input":"source version with text","auth":"internal","target":"gi_evidence_records","expected":"quote, locator and source-version link","mode":"integrity_query","initial_status":"SKIP","owner":"unassigned","issue":null},
+    {"id":"P15","title":"Evidence review → verified evidence","gate":"B","severity":"blocker","source":"gi_evidence_records","trigger":"evidence-review","input":"review task + reviewer","auth":"Telegram HMAC + active reviewer","target":"evidence review audit","expected":"verified evidence","mode":"evidence_query","initial_status":"SKIP","owner":"unassigned","issue":112},
+    {"id":"P16","title":"Verified evidence → verified requirement","gate":"B","severity":"blocker","source":"gi_evidence_records","trigger":"requirement verification","input":"verified evidence link","auth":"reviewer / internal","target":"gi_measure_requirements","expected":"verified requirement linked to measure/evidence","mode":"integrity_query","initial_status":"SKIP","owner":"unassigned","issue":112},
+    {"id":"P17","title":"Evidence → analytic signal link","gate":"C","severity":"blocker","source":"gi_evidence_records","trigger":"signal linker","input":"verified evidence","auth":"internal","target":"gi_signal_evidence","expected":"non-zero valid links","mode":"integrity_query","initial_status":"SKIP","owner":"unassigned","issue":113},
+    {"id":"P18","title":"Signal → Decision Card","gate":"C","severity":"blocker","source":"gi_analytic_signals","trigger":"intelligence engine","input":"evidence-backed signal","auth":"internal","target":"gi_decision_cards","expected":"card with evidence/source trace","mode":"integrity_query","initial_status":"SKIP","owner":"unassigned","issue":113},
+    {"id":"P19","title":"Decision Card → Truth Gate","gate":"C","severity":"blocker","source":"gi_decision_cards","trigger":"Truth Gate","input":"traceable card","auth":"internal","target":"decision card gate fields","expected":"deterministic gate result","mode":"evidence_query","initial_status":"SKIP","owner":"unassigned","issue":113},
+    {"id":"P20","title":"Truth Gate → publishable result","gate":"C","severity":"blocker","source":"Truth Gate","trigger":"publication contract","input":"truth_gate_passed card","auth":"internal","target":"publishable result","expected":"at least one controlled pass","mode":"evidence_query","initial_status":"SKIP","owner":"unassigned","issue":113},
+    {"id":"P21","title":"Verified signals → forecast","gate":"D","severity":"blocker","source":"gi_analytic_signals","trigger":"forecast engine","input":"verified evidence-backed signals","auth":"internal","target":"gi_forecasts","expected":"forecast with evidence and falsification","mode":"evidence_query","initial_status":"SKIP","owner":"unassigned","issue":null},
+    {"id":"P22","title":"Dead letter → retry or manual resolution","gate":"A/B","severity":"high","source":"gi_crawl_jobs","trigger":"recovery workflow","input":"dead_letter job","auth":"operator / internal","target":"retry or resolution state","expected":"no abandoned blocker","mode":"evidence_query","initial_status":"SKIP","owner":"unassigned","issue":114},
+    {"id":"P23","title":"Legacy admissions → isolated boundary","gate":"Isolation","severity":"high","source":"ingestion_queue + ingestion_jobs","trigger":"boundary policy","input":"legacy workload","auth":"separate owner/deploy/schema","target":"isolated legacy contour","expected":"no shared resource impact","mode":"evidence_query","initial_status":"SKIP","owner":"unassigned","issue":115},
+    {"id":"P24","title":"Meniscus stage → backend readiness state","gate":"UX/A","severity":"high","source":"report UI","trigger":"meniscus controller","input":"report + readiness state","auth":"authenticated UI","target":"UI stage state","expected":"availability reflects backend","mode":"contract_only","initial_status":"SKIP","owner":"unassigned","issue":116}
+  ]
+}
