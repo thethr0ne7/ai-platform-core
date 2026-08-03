@@ -73,7 +73,7 @@ export function EvidenceReviewWorkspace() {
       setTasks(result.tasks);
       setSummary(result.summary);
       setMessage(result.tasks.length
-        ? `В рабочей очереди ${result.tasks.length}. Машинное совпадение — только кандидат; подтверждённым требование становится после вашего решения.`
+        ? `В рабочей очереди ${result.tasks.length}. Показывается только фрагмент сохранённой версии вокруг точной цитаты; произвольное начало документа больше не используется.`
         : "Открытых задач проверки сейчас нет.");
     } catch (error) {
       setMessage(friendlyError(error));
@@ -113,7 +113,7 @@ export function EvidenceReviewWorkspace() {
             <div className="min-w-0">
               <div className="status-pill"><ShieldCheck size={15} /> Экспертный доступ · {roleLabel(status?.role)}</div>
               <h1 className="mt-4 max-w-4xl text-3xl font-semibold tracking-[-.04em] sm:text-5xl">Проверка доказательств</h1>
-              <p className="mt-3 max-w-3xl text-sm leading-6 text-mist/55">Машина ищет буквальное совпадение в сохранённой Tier A версии. Но статус «подтверждено» возникает только после реального решения эксперта, точной цитаты и locator.</p>
+              <p className="mt-3 max-w-3xl text-sm leading-6 text-mist/55">Каждая карточка показывает только контекст конкретного требования. Подтверждение доступно лишь когда точная цитата найдена в сохранённой Tier A версии и указан locator.</p>
             </div>
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
               <Link href="/" className="secondary-cta"><ArrowLeft size={15} /> К проектам</Link>
@@ -178,9 +178,12 @@ function EvidenceTaskCard({
   const [quote, setQuote] = useState(task.candidate_quote ?? "");
   const [locator, setLocator] = useState(task.candidate_locator ?? "");
   const [notes, setNotes] = useState(task.task_notes ?? "");
-  const canVerify = task.task_type === "quote_locator" && task.evidence_tier === "A" && task.owner_validation_status === "verified" && Boolean(task.source_version_id);
-  const hasMachineCandidate = task.task_type === "quote_locator" && Boolean(task.candidate_quote);
+  const canVerify = task.verification_ready === true;
+  const hasMachineCandidate = task.task_type === "quote_locator" && task.candidate_quote_found === true;
   const sourceReady = task.source_ready === true;
+  const excerptRange = task.source_excerpt_start && task.source_excerpt_end
+    ? `символы ${task.source_excerpt_start.toLocaleString("ru-RU")}–${task.source_excerpt_end.toLocaleString("ru-RU")} из ${task.source_text_total_length.toLocaleString("ru-RU")}`
+    : "контекст не сформирован";
 
   return (
     <article className="glass-surface min-w-0 rounded-[28px] p-4 sm:p-6">
@@ -192,9 +195,10 @@ function EvidenceTaskCard({
         </div>
         <div className="flex flex-wrap gap-2 sm:max-w-64 sm:justify-end">
           <StatusChip value={task.task_status} />
-          {hasMachineCandidate ? <span className="status-chip">Совпадение найдено машиной</span> : null}
+          {hasMachineCandidate ? <span className="status-chip">Точная цитата найдена</span> : null}
           <span className={`status-chip ${task.evidence_tier === "A" ? "status-chip-active" : ""}`}>Tier {task.evidence_tier ?? "—"}</span>
           <span className={`status-chip ${sourceReady ? "status-chip-active" : ""}`}>{sourceReady ? "Источник готов" : "Источник не готов"}</span>
+          <span className={`status-chip ${canVerify ? "status-chip-active" : ""}`}>{canVerify ? "Можно подтвердить" : "Подтверждение закрыто"}</span>
           <span className="status-chip">{formatAge(task.age_seconds)}</span>
         </div>
       </div>
@@ -208,16 +212,16 @@ function EvidenceTaskCard({
         <Info title="Причина блокировки" value={blockerLabel(task.blocker_reason)} />
       </div>
 
-      {hasMachineCandidate ? <div className="mt-4 rounded-[18px] border border-signal/20 bg-signal/[.035] p-4 text-sm leading-6 text-mist/60"><strong className="text-signal">Важно:</strong> система нашла буквальный фрагмент и подготовила поля ниже. Это ещё не юридическое подтверждение — проверьте смысл, редакцию документа и locator.</div> : null}
+      {hasMachineCandidate ? <div className="mt-4 rounded-[18px] border border-signal/20 bg-signal/[.035] p-4 text-sm leading-6 text-mist/60"><strong className="text-signal">Контекст найден:</strong> ниже показан участок сохранённой версии вокруг этой конкретной цитаты. Сверьте смысл, редакцию и locator с официальным документом.</div> : null}
 
       {task.canonical_url ? <a className="report-link" href={task.canonical_url} target="_blank" rel="noreferrer">Открыть официальный документ <ArrowUpRight size={14} /></a> : null}
 
       {task.source_text_excerpt ? (
         <details className="requirement-details mt-4">
-          <summary><span>Текст сохранённой версии</span><span>{task.source_text_excerpt.length.toLocaleString("ru-RU")} знаков</span><FileSearch size={15} /></summary>
+          <summary><span>Фрагмент сохранённой версии</span><span>{excerptRange}</span><FileSearch size={15} /></summary>
           <pre className="mt-3 max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-[18px] border border-white/[.07] bg-black/20 p-4 text-xs leading-6 text-mist/60">{task.source_text_excerpt}</pre>
         </details>
-      ) : <div className="mt-4 rounded-[18px] border border-signal/15 bg-signal/[.03] p-4 text-sm leading-6 text-mist/55">Сохранённого текста Tier A пока нет. Подтверждение требования заблокировано.</div>}
+      ) : <div className="mt-4 rounded-[18px] border border-signal/15 bg-signal/[.03] p-4 text-sm leading-6 text-mist/55">{excerptUnavailableMessage(task)}</div>}
 
       {task.task_type === "quote_locator" ? (
         <div className="mt-4 space-y-3">
@@ -296,10 +300,19 @@ function blockerLabel(value: string | null | undefined) {
     source_version_missing: "Нет сохранённой версии",
     source_text_missing: "Нет извлечённого текста",
     candidate_quote_missing: "Нет точной цитаты",
+    candidate_quote_not_found: "Цитата не найдена в сохранённой версии",
     candidate_locator_missing: "Нет точного locator",
     source_version_changed: "Источник изменился — нужна повторная проверка",
   };
   return value ? labels[value] ?? value : "Блокирующих причин нет";
+}
+
+function excerptUnavailableMessage(task: EvidenceReviewTask) {
+  if (task.blocker_reason === "candidate_quote_missing") return "Фрагмент не показывается: для этого требования ещё не подготовлена точная цитата. Случайное начало документа намеренно скрыто.";
+  if (task.blocker_reason === "candidate_quote_not_found") return "Подготовленная цитата не найдена в сохранённой версии. Фрагмент скрыт, подтверждение запрещено.";
+  if (task.blocker_reason === "candidate_locator_missing") return "Цитата найдена, но отсутствует точный locator. Подтверждение запрещено до привязки к пункту или странице.";
+  if (!task.source_ready) return "Сохранённой готовой версии Tier A пока нет. Подтверждение требования заблокировано.";
+  return "Контекст для этой служебной задачи не сформирован.";
 }
 
 function reviewSuccessMessage(decision: ReviewInput["decision"]) {
