@@ -36,6 +36,12 @@ export type EvidenceReviewTask = {
   age_seconds: number;
   blocker_reason: string | null;
   source_ready: boolean;
+  source_text_total_length: number;
+  source_excerpt_start: number | null;
+  source_excerpt_end: number | null;
+  source_excerpt_strategy: string;
+  candidate_quote_found: boolean;
+  verification_ready: boolean;
 };
 
 export type EvidenceReviewerStatus = {

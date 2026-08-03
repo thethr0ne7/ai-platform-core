@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
+  ArrowUpRight,
   Bot,
   CheckCircle2,
   FileText,
@@ -28,6 +29,7 @@ import {
   requestDocumentProcessing,
   type TelegramIdentity,
   type TelegramProject,
+  type TelegramProjectDocument,
 } from "../lib/telegram";
 import {
   GovernmentOpportunityReport,
@@ -35,8 +37,27 @@ import {
 } from "./government-opportunity-report";
 import { ProjectFactReview } from "./project-fact-review";
 
- type DraftDocument = { id: string; file: File; category: string; uploaded: boolean };
- type ProjectDraft = {
+type LocalDocument = {
+  kind: "local";
+  id: string;
+  file: File;
+  category: string;
+};
+
+type StoredDocument = {
+  kind: "stored";
+  id: string;
+  fileName: string;
+  category: string;
+  mimeType: string | null;
+  byteSize: number;
+  analysisStatus: string;
+  createdAt: string;
+};
+
+type WorkspaceDocument = LocalDocument | StoredDocument;
+
+type ProjectDraft = {
   id?: string;
   name: string;
   region: string;
@@ -69,7 +90,7 @@ export function TelegramProjectWorkspace() {
   const [identity, setIdentity] = useState<TelegramIdentity | null>(null);
   const [projects, setProjects] = useState<TelegramProject[]>([]);
   const [draft, setDraft] = useState<ProjectDraft>(emptyProject);
-  const [documents, setDocuments] = useState<DraftDocument[]>([]);
+  const [documents, setDocuments] = useState<WorkspaceDocument[]>([]);
   const [category, setCategory] = useState(categories[0]);
   const [busy, setBusy] = useState(false);
   const [mode, setMode] = useState<"list" | "edit">("list");
@@ -78,7 +99,12 @@ export function TelegramProjectWorkspace() {
   const [step, setStep] = useState(1);
 
   const uploadedCount = useMemo(
-    () => documents.filter((document) => document.uploaded).length,
+    () => documents.filter((document) => document.kind === "stored").length,
+    [documents],
+  );
+
+  const pendingCount = useMemo(
+    () => documents.filter((document) => document.kind === "local").length,
     [documents],
   );
 
@@ -114,6 +140,7 @@ export function TelegramProjectWorkspace() {
   }
 
   function openProject(project: TelegramProject) {
+    const stored = mapStoredDocuments(project.gi_project_documents ?? []);
     setDraft({
       id: project.id,
       name: project.name,
@@ -122,11 +149,13 @@ export function TelegramProjectWorkspace() {
       legalForm: project.legal_form ?? "",
       landStatus: project.land_status ?? "",
     });
-    setDocuments([]);
+    setDocuments(stored);
     setReport(null);
     setMode("edit");
     setStep(1);
-    setMessage("Проект открыт. Запустите анализ, чтобы получить актуальный маршрут.");
+    setMessage(stored.length
+      ? `Проект открыт. Загруженных документов: ${stored.length}. Перейдите к шагу «Документы», чтобы открыть файлы и увидеть статус разбора.`
+      : "Проект открыт. Документы пока не загружены.");
   }
 
   function goToStep(target: number) {
@@ -139,14 +168,14 @@ export function TelegramProjectWorkspace() {
       return;
     }
 
-    const accepted: DraftDocument[] = [];
+    const accepted: LocalDocument[] = [];
     const rejected: string[] = [];
 
     for (const file of Array.from(fileList)) {
       const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
       if (!ACCEPTED_EXTENSIONS.includes(extension)) rejected.push(`${file.name}: формат пока не поддерживается`);
       else if (file.size > MAX_FILE_SIZE) rejected.push(`${file.name}: размер больше 25 МБ`);
-      else accepted.push({ id: crypto.randomUUID(), file, category, uploaded: false });
+      else accepted.push({ kind: "local", id: crypto.randomUUID(), file, category });
     }
 
     if (accepted.length) {
@@ -155,6 +184,15 @@ export function TelegramProjectWorkspace() {
     }
     if (rejected.length) setMessage(rejected.join("; "));
     if (inputRef.current) inputRef.current.value = "";
+  }
+
+  async function refreshProjectDocuments(projectId: string, failedLocal: LocalDocument[] = []) {
+    const list = await listTelegramProjects();
+    setProjects(list.projects);
+    const project = list.projects.find((item) => item.id === projectId);
+    const stored = mapStoredDocuments(project?.gi_project_documents ?? []);
+    setDocuments([...stored, ...failedLocal]);
+    return stored;
   }
 
   async function saveProject() {
@@ -178,7 +216,8 @@ export function TelegramProjectWorkspace() {
 
       const projectId = result.project.id;
       setDraft((current) => ({ ...current, id: projectId }));
-      const pending = documents.filter((item) => !item.uploaded);
+      const pending = documents.filter((item): item is LocalDocument => item.kind === "local");
+      const uploadedIds = new Set<string>();
       let uploadedNow = 0;
       const uploadErrors: string[] = [];
 
@@ -209,9 +248,8 @@ export function TelegramProjectWorkspace() {
             },
           });
 
-          setDocuments((current) => current.map((item) => item.id === document.id ? { ...item, uploaded: true } : item));
+          uploadedIds.add(document.id);
           uploadedNow += 1;
-
           void requestDocumentProcessing(registered.document.id).catch(() => {
             // Durable Supabase queue will process the document if the immediate trigger is unavailable.
           });
@@ -220,17 +258,63 @@ export function TelegramProjectWorkspace() {
         }
       }
 
-      const list = await listTelegramProjects();
-      setProjects(list.projects);
+      const failedLocal = pending.filter((item) => !uploadedIds.has(item.id));
+      const stored = await refreshProjectDocuments(projectId, failedLocal);
       setMessage(uploadErrors.length
-        ? `Проект сохранён. Загружено: ${uploadedNow}. Требуют повторной загрузки: ${uploadErrors.length}.`
+        ? `Проект сохранён. На сервере документов: ${stored.length}. Не загрузились: ${uploadErrors.length}. Они оставлены в списке для повторной попытки.`
         : uploadedNow
-          ? `Проект сохранён. Загружено документов: ${uploadedNow}. Разбор запущен.`
-          : "Проект сохранён.");
+          ? `Проект сохранён. Загружено сейчас: ${uploadedNow}. Всего документов: ${stored.length}. Разбор запущен.`
+          : `Проект сохранён. Загруженных документов: ${stored.length}.`);
       return projectId;
     } catch (error) {
       setMessage(friendlyWorkspaceError(error, "Не удалось сохранить проект."));
       return null;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function openStoredDocument(document: StoredDocument) {
+    setBusy(true);
+    setMessage(`Готовим защищённую ссылку: ${document.fileName}`);
+    try {
+      const result = await callTelegramApi<{ url: string; expiresIn: number }>("create_download_url", {
+        documentId: document.id,
+      });
+      const anchor = window.document.createElement("a");
+      anchor.href = result.url;
+      anchor.target = "_blank";
+      anchor.rel = "noopener noreferrer";
+      window.document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      setMessage(`Документ открыт. Защищённая ссылка действует ${Math.round(result.expiresIn / 60)} минут.`);
+    } catch (error) {
+      setMessage(friendlyWorkspaceError(error, "Не удалось открыть документ."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteWorkspaceDocument(document: WorkspaceDocument) {
+    if (document.kind === "local") {
+      setDocuments((current) => current.filter((item) => item.id !== document.id));
+      setMessage("Файл удалён из очереди загрузки.");
+      return;
+    }
+
+    if (!window.confirm(`Удалить документ «${document.fileName}» из проекта?`)) return;
+    setBusy(true);
+    setMessage(`Удаляем документ: ${document.fileName}`);
+    try {
+      await callTelegramApi<{ success: boolean }>("delete_document", { documentId: document.id });
+      setDocuments((current) => current.filter((item) => item.id !== document.id));
+      setProjects((current) => current.map((project) => project.id === draft.id
+        ? { ...project, gi_project_documents: (project.gi_project_documents ?? []).filter((item) => item.id !== document.id) }
+        : project));
+      setMessage("Документ удалён из хранилища и проекта.");
+    } catch (error) {
+      setMessage(friendlyWorkspaceError(error, "Не удалось удалить документ."));
     } finally {
       setBusy(false);
     }
@@ -303,15 +387,15 @@ export function TelegramProjectWorkspace() {
         {step === 2 && (
           <>
             <section className="workspace-panel glass-surface mt-3">
-              <SectionHeading icon={<FileText size={18} />} title="Документы" subtitle="Файлы разбираются, дубликаты определяются автоматически" />
+              <SectionHeading icon={<FileText size={18} />} title="Документы" subtitle="Сохранённые файлы загружаются вместе с проектом; статус разбора показывается отдельно" />
               <Field label="Категория документа"><select value={category} onChange={(event) => setCategory(event.target.value)}>{categories.map((item) => <option key={item}>{item}</option>)}</select></Field>
               <label className="primary-cta relative mt-4 flex w-full cursor-pointer items-center justify-center overflow-hidden"><FileUp size={16} /> Добавить файлы<input ref={inputRef} className="absolute inset-0 h-full w-full cursor-pointer opacity-0" type="file" multiple accept=".pdf,.docx,.csv,.txt,.jpg,.jpeg,.png,.webp" onChange={(event) => addFiles(event.currentTarget.files)} disabled={busy} /></label>
               <p className="mt-3 text-xs leading-5 text-mist/45">PDF, DOCX, CSV, TXT и изображения до 25 МБ. Сканированные файлы распознаются отдельно.</p>
               <div className="mt-4 space-y-2">
-                {documents.map((document) => <DocumentRow key={document.id} document={document} onDelete={() => setDocuments((current) => current.filter((item) => item.id !== document.id))} />)}
-                {!documents.length ? <div className="rounded-[18px] border border-dashed border-white/10 p-4 text-sm leading-6 text-mist/40">Новые файлы ещё не добавлены. Ранее загруженные документы учитываются системой автоматически.</div> : null}
+                {documents.map((document) => <DocumentRow key={document.id} document={document} busy={busy} onOpen={document.kind === "stored" ? () => void openStoredDocument(document) : undefined} onDelete={() => void deleteWorkspaceDocument(document)} />)}
+                {!documents.length ? <div className="rounded-[18px] border border-dashed border-white/10 p-4 text-sm leading-6 text-mist/40">Документов в проекте пока нет.</div> : null}
               </div>
-              <div className="mt-4 compact-row"><span>Подготовлено: {documents.length}</span><strong>Загружено: {uploadedCount}</strong></div>
+              <div className="mt-4 compact-row"><span>Ожидают загрузки: {pendingCount}</span><strong>На сервере: {uploadedCount}</strong></div>
             </section>
 
             <div className="glass-surface sticky bottom-3 z-30 mt-3 grid gap-2 rounded-[24px] p-3 shadow-2xl sm:grid-cols-3">
@@ -354,15 +438,7 @@ function WorkspaceStepper({ active, current, onSelect }: { active: number; curre
         const number = index + 1;
         const enabled = number <= active;
         const className = `workspace-step w-full text-left transition ${enabled ? "workspace-step-active" : ""} ${number === current ? "ring-2 ring-signal/50" : ""}`;
-        const content = (
-          <>
-            <span className="workspace-step-number">{number}</span>
-            <div className="mt-2 min-w-0">
-              <p className="font-medium leading-5">{title}</p>
-              <p className="mt-1 text-[10px] leading-4 text-mist/40">{detail}</p>
-            </div>
-          </>
-        );
+        const content = <><span className="workspace-step-number">{number}</span><div className="mt-2 min-w-0"><p className="font-medium leading-5">{title}</p><p className="mt-1 text-[10px] leading-4 text-mist/40">{detail}</p></div></>;
         return enabled
           ? <button key={title} type="button" className={className} onClick={() => onSelect(number)}>{content}</button>
           : <div key={title} className={className}>{content}</div>;
@@ -375,12 +451,56 @@ function SectionHeading({ icon, title, subtitle }: { icon: React.ReactNode; titl
   return <div className="grid grid-cols-[40px_minmax(0,1fr)] items-start gap-3"><div className="brand-mark h-10 w-10 rounded-[16px]">{icon}</div><div className="min-w-0"><h2 className="text-xl font-semibold leading-7">{title}</h2><p className="mt-1 text-xs leading-5 text-mist/45">{subtitle}</p></div></div>;
 }
 
-function DocumentRow({ document, onDelete }: { document: DraftDocument; onDelete: () => void }) {
-  return <div className="clay-inset grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-[18px] p-3"><div className="min-w-0"><p className="truncate text-sm">{document.file.name}</p><p className="mt-1 break-words text-xs leading-5 text-mist/40">{document.category} · {document.uploaded ? "загружен, разбор запущен" : "готов к загрузке"}</p></div>{document.uploaded ? <CheckCircle2 className="text-signal" size={17} /> : <button className="icon-button h-9 w-9 rounded-[14px]" aria-label="Удалить файл" onClick={onDelete}><Trash2 size={15} /></button>}</div>;
+function DocumentRow({ document, busy, onOpen, onDelete }: { document: WorkspaceDocument; busy: boolean; onOpen?: () => void; onDelete: () => void }) {
+  const fileName = document.kind === "local" ? document.file.name : document.fileName;
+  const detail = document.kind === "local"
+    ? `${document.category} · ${formatBytes(document.file.size)} · готов к загрузке`
+    : `${document.category} · ${formatBytes(document.byteSize)} · ${analysisStatusLabel(document.analysisStatus)}`;
+  return (
+    <div className="clay-inset grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-[18px] p-3">
+      <div className="min-w-0"><p className="truncate text-sm">{fileName}</p><p className="mt-1 break-words text-xs leading-5 text-mist/40">{detail}</p></div>
+      <div className="flex items-center gap-2">
+        {document.kind === "stored" ? <button className="icon-button h-9 w-9 rounded-[14px]" aria-label={`Открыть ${fileName}`} onClick={onOpen} disabled={busy}><ArrowUpRight size={15} /></button> : null}
+        {document.kind === "stored" && document.analysisStatus === "parsed" ? <CheckCircle2 className="text-signal" size={17} /> : null}
+        <button className="icon-button h-9 w-9 rounded-[14px]" aria-label={`Удалить ${fileName}`} onClick={onDelete} disabled={busy}><Trash2 size={15} /></button>
+      </div>
+    </div>
+  );
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return <label className="mt-4 block min-w-0"><span className="mb-2 block text-xs text-mist/50">{label}</span>{children}</label>;
+}
+
+function mapStoredDocuments(documents: TelegramProjectDocument[]): StoredDocument[] {
+  return documents.map((document) => ({
+    kind: "stored",
+    id: document.id,
+    fileName: document.file_name,
+    category: document.category,
+    mimeType: document.mime_type,
+    byteSize: Number(document.byte_size ?? 0),
+    analysisStatus: document.analysis_status ?? "queued",
+    createdAt: document.created_at,
+  }));
+}
+
+function analysisStatusLabel(status: string) {
+  const labels: Record<string, string> = {
+    queued: "ожидает разбора",
+    processing: "разбирается",
+    parsed: "разобран",
+    failed: "ошибка разбора",
+    duplicate: "дубликат",
+  };
+  return labels[status] ?? status;
+}
+
+function formatBytes(value: number) {
+  const bytes = Math.max(0, Number(value) || 0);
+  if (bytes < 1024) return `${bytes} Б`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} КБ`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} МБ`;
 }
 
 function friendlyWorkspaceError(error: unknown, fallback: string) {
