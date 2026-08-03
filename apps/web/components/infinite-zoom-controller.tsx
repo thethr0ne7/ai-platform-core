@@ -50,17 +50,32 @@ const layers = [
 ] as const;
 
 type LayerId = (typeof layers)[number]["id"];
+type DisplaySnapshot = { value: string; priority: string };
 
+const DEFAULT_LAYER: LayerId = "report-actions";
 const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
 
+function isLayerId(value: string): value is LayerId {
+  return layers.some((layer) => layer.id === value);
+}
+
+function isMonitoringNoise(element: HTMLElement): boolean {
+  const headings = Array.from(element.querySelectorAll("h2, h3"))
+    .map((heading) => heading.textContent?.trim())
+    .filter(Boolean);
+  return headings.some((heading) =>
+    heading === "Новые изменения" || heading === "Аналитические сигналы"
+  );
+}
+
 export function InfiniteZoomController() {
   const [workspace, setWorkspace] = useState<HTMLElement | null>(null);
-  const [mountNode, setMountNode] = useState<HTMLDivElement | null>(null);
-  const [activeLayer, setActiveLayer] = useState<LayerId>("report-summary");
+  const [activeLayer, setActiveLayer] = useState<LayerId>(DEFAULT_LAYER);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const dockRef = useRef<HTMLDivElement | null>(null);
   const pointerIdRef = useRef<number | null>(null);
+  const originalDisplaysRef = useRef(new Map<HTMLElement, DisplaySnapshot>());
 
   useEffect(() => {
     const locateWorkspace = () => {
@@ -75,26 +90,49 @@ export function InfiniteZoomController() {
   }, []);
 
   useEffect(() => {
-    if (!workspace) {
-      setMountNode(null);
-      return;
+    if (!workspace) return;
+
+    const hash = window.location.hash.slice(1);
+    const initialLayer = isLayerId(hash) ? hash : DEFAULT_LAYER;
+    setActiveLayer(initialLayer);
+    if (!isLayerId(hash)) {
+      window.history.replaceState(null, "", `#${initialLayer}`);
     }
 
-    const node = document.createElement("div");
-    node.dataset.infiniteZoomController = "true";
-    workspace.prepend(node);
-    setMountNode(node);
-
-    const hash = window.location.hash.slice(1) as LayerId;
-    if (layers.some((layer) => layer.id === hash)) setActiveLayer(hash);
-
     const previousPaddingBottom = workspace.style.paddingBottom;
-    workspace.style.paddingBottom = "calc(8.25rem + env(safe-area-inset-bottom))";
+    workspace.style.paddingBottom = "calc(7.25rem + env(safe-area-inset-bottom))";
+
+    const originalNavigation = workspace.querySelector<HTMLElement>(".report-nav");
+    const previousNavigationDisplay = originalNavigation
+      ? {
+          value: originalNavigation.style.getPropertyValue("display"),
+          priority: originalNavigation.style.getPropertyPriority("display"),
+        }
+      : null;
+    originalNavigation?.style.setProperty("display", "none", "important");
+    originalNavigation?.setAttribute("aria-hidden", "true");
+
+    const onHashChange = () => {
+      const nextHash = window.location.hash.slice(1);
+      if (isLayerId(nextHash)) setActiveLayer(nextHash);
+    };
+    window.addEventListener("hashchange", onHashChange);
 
     return () => {
+      window.removeEventListener("hashchange", onHashChange);
       workspace.style.paddingBottom = previousPaddingBottom;
-      node.remove();
-      setMountNode(null);
+      if (originalNavigation && previousNavigationDisplay) {
+        if (previousNavigationDisplay.value) {
+          originalNavigation.style.setProperty(
+            "display",
+            previousNavigationDisplay.value,
+            previousNavigationDisplay.priority,
+          );
+        } else {
+          originalNavigation.style.removeProperty("display");
+        }
+        originalNavigation.removeAttribute("aria-hidden");
+      }
     };
   }, [workspace]);
 
@@ -103,28 +141,47 @@ export function InfiniteZoomController() {
 
     const applyLayer = () => {
       const originalNavigation = workspace.querySelector<HTMLElement>(".report-nav");
-      if (originalNavigation) originalNavigation.hidden = true;
+      originalNavigation?.style.setProperty("display", "none", "important");
+      originalNavigation?.setAttribute("aria-hidden", "true");
 
-      const contentChildren = Array.from(workspace.children).filter((child) => {
-        const element = child as HTMLElement;
-        return !element.dataset.infiniteZoomController && element !== originalNavigation;
-      }) as HTMLElement[];
+      const contentChildren = Array.from(workspace.children)
+        .filter((child) => child !== originalNavigation) as HTMLElement[];
 
-      const anchorIndexes = layers
-        .map((layer) => {
-          const anchor = workspace.querySelector<HTMLElement>(`#${layer.id}`);
-          return anchor ? contentChildren.indexOf(anchor) : -1;
-        })
-        .filter((index) => index >= 0);
+      const indexByLayer = new Map<LayerId, number>();
+      for (const layer of layers) {
+        const anchor = workspace.querySelector<HTMLElement>(`#${layer.id}`);
+        const index = anchor ? contentChildren.indexOf(anchor) : -1;
+        if (index >= 0) indexByLayer.set(layer.id, index);
+      }
 
-      const activeAnchor = workspace.querySelector<HTMLElement>(`#${activeLayer}`);
-      const start = activeAnchor ? contentChildren.indexOf(activeAnchor) : -1;
-      const nextStart = anchorIndexes
-        .filter((index) => index > start)
-        .sort((a, b) => a - b)[0] ?? contentChildren.length;
+      const start = indexByLayer.get(activeLayer) ?? -1;
+      const boundaries = Array.from(indexByLayer.values()).sort((left, right) => left - right);
+      const nextStart = boundaries.find((index) => index > start) ?? contentChildren.length;
 
       contentChildren.forEach((element, index) => {
-        element.hidden = start < 0 ? false : index < start || index >= nextStart;
+        if (!originalDisplaysRef.current.has(element)) {
+          originalDisplaysRef.current.set(element, {
+            value: element.style.getPropertyValue("display"),
+            priority: element.style.getPropertyPriority("display"),
+          });
+        }
+
+        const inActiveRange = start < 0 || (index >= start && index < nextStart);
+        const hiddenAsMonitoringNoise = activeLayer === "report-evidence" && isMonitoringNoise(element);
+        const visible = inActiveRange && !hiddenAsMonitoringNoise;
+        const original = originalDisplaysRef.current.get(element);
+
+        if (visible) {
+          if (original?.value) {
+            element.style.setProperty("display", original.value, original.priority);
+          } else {
+            element.style.removeProperty("display");
+          }
+          element.removeAttribute("aria-hidden");
+        } else {
+          element.style.setProperty("display", "none", "important");
+          element.setAttribute("aria-hidden", "true");
+        }
       });
     };
 
@@ -134,11 +191,15 @@ export function InfiniteZoomController() {
 
     return () => {
       observer.disconnect();
-      const originalNavigation = workspace.querySelector<HTMLElement>(".report-nav");
-      if (originalNavigation) originalNavigation.hidden = false;
-      Array.from(workspace.children).forEach((child) => {
-        (child as HTMLElement).hidden = false;
-      });
+      for (const [element, original] of originalDisplaysRef.current.entries()) {
+        if (original.value) {
+          element.style.setProperty("display", original.value, original.priority);
+        } else {
+          element.style.removeProperty("display");
+        }
+        element.removeAttribute("aria-hidden");
+      }
+      originalDisplaysRef.current.clear();
     };
   }, [activeLayer, workspace]);
 
@@ -151,7 +212,7 @@ export function InfiniteZoomController() {
   const markerLayer = layers[displayIndex];
   const markerLeft = `${((displayIndex + 0.5) / layers.length) * 100}%`;
   const notchCenter = 50 + displayIndex * 100;
-  const notchPath = `M 24 18 H ${notchCenter - 38} C ${notchCenter - 24} 18 ${notchCenter - 30} 56 ${notchCenter} 56 C ${notchCenter + 30} 56 ${notchCenter + 24} 18 ${notchCenter + 38} 18 H 476 Q 488 18 488 30 V 78 Q 488 90 476 90 H 24 Q 12 90 12 78 V 30 Q 12 18 24 18 Z`;
+  const notchPath = `M 18 16 H ${notchCenter - 37} C ${notchCenter - 23} 16 ${notchCenter - 30} 52 ${notchCenter} 52 C ${notchCenter + 30} 52 ${notchCenter + 23} 16 ${notchCenter + 37} 16 H 482 Q 490 16 490 25 V 78 Q 490 87 481 87 H 19 Q 10 87 10 78 V 25 Q 10 16 18 16 Z`;
 
   const selectLayer = useCallback((id: LayerId) => {
     setActiveLayer(id);
@@ -206,41 +267,38 @@ export function InfiniteZoomController() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [currentIndex, selectLayer, workspace]);
 
-  if (!workspace || !mountNode) return null;
+  if (!workspace || typeof document === "undefined") return null;
 
   const MarkerIcon = markerLayer.icon;
 
   return createPortal(
     <nav
-      className="pointer-events-none fixed inset-x-0 bottom-0 z-[65] mx-auto max-w-3xl px-3 pb-[max(.55rem,env(safe-area-inset-bottom))]"
+      className="pointer-events-none fixed inset-x-0 bottom-0 z-[65] mx-auto max-w-3xl px-3 pb-[max(.45rem,env(safe-area-inset-bottom))]"
       aria-label="Этапы проекта"
     >
       <div className="pointer-events-auto mx-auto max-w-xl">
-        <div
-          aria-live="polite"
-          className="mx-auto mb-1.5 w-fit max-w-[calc(100vw-2rem)] truncate rounded-full border border-mist/[.08] bg-ink/90 px-3 py-1.5 text-[10px] text-mist/55 shadow-lg backdrop-blur-xl"
-        >
-          Этап {currentIndex + 1} из {layers.length} · <span className="font-semibold text-mist">{current.title}</span> · {current.subtitle}
-        </div>
+        <span className="sr-only" aria-live="polite">
+          Этап {currentIndex + 1} из {layers.length}: {current.title}. {current.subtitle}
+        </span>
 
-        <div ref={dockRef} className="relative h-[104px] select-none">
+        <div ref={dockRef} className="relative h-[92px] select-none">
           <svg
-            className="absolute inset-0 h-full w-full overflow-visible text-ink drop-shadow-2xl"
-            viewBox="0 0 500 104"
+            className="absolute inset-0 h-full w-full overflow-visible drop-shadow-2xl"
+            viewBox="0 0 500 92"
             preserveAspectRatio="none"
             aria-hidden="true"
           >
             <path
               d={notchPath}
-              fill="rgba(8, 11, 9, 0.96)"
+              fill="rgba(8, 11, 9, 0.97)"
               stroke="rgba(255, 255, 255, 0.14)"
               strokeWidth="1.2"
               vectorEffect="non-scaling-stroke"
-              style={{ transition: "d 280ms cubic-bezier(.2,.8,.2,1)" }}
+              className="transition-all duration-300 motion-reduce:transition-none"
             />
           </svg>
 
-          <div className="absolute inset-x-0 top-[20px] grid h-[74px] grid-cols-5 px-1">
+          <div className="absolute inset-x-0 top-[18px] grid h-[68px] grid-cols-5 px-1">
             {layers.map((layer, index) => {
               const Icon = layer.icon;
               const selected = index === currentIndex;
@@ -255,9 +313,9 @@ export function InfiniteZoomController() {
                 >
                   <Icon
                     size={18}
-                    className={`transition ${selected ? "opacity-0" : "text-mist/45 group-hover:text-mist/75"}`}
+                    className={`transition motion-reduce:transition-none ${selected ? "opacity-0" : "text-mist/45 group-hover:text-mist/75"}`}
                   />
-                  <span className={`w-full truncate px-0.5 text-[9px] font-medium transition ${selected ? "text-signal" : "text-mist/38"}`}>
+                  <span className={`w-full truncate px-0.5 text-[10px] font-medium transition motion-reduce:transition-none ${selected ? "text-signal" : "text-mist/42"}`}>
                     {layer.title}
                   </span>
                 </button>
@@ -267,7 +325,7 @@ export function InfiniteZoomController() {
 
           <button
             type="button"
-            className="absolute top-0 grid h-14 w-14 -translate-x-1/2 touch-none place-items-center rounded-full border border-signal/60 bg-signal text-ink shadow-[0_0_0_5px_rgba(8,11,9,.94),0_12px_34px_rgba(170,255,40,.32)] transition-[left,transform] duration-300 active:scale-95"
+            className="absolute top-0 grid h-[52px] w-[52px] -translate-x-1/2 touch-none place-items-center rounded-full border border-signal/60 bg-signal text-ink shadow-[0_0_0_5px_rgba(8,11,9,.96),0_10px_28px_rgba(170,255,40,.28)] transition-[left,transform] duration-300 motion-reduce:transition-none active:scale-95"
             style={{ left: markerLeft, touchAction: "none" }}
             onPointerDown={handleMarkerPointerDown}
             onPointerMove={handleMarkerPointerMove}
@@ -276,13 +334,13 @@ export function InfiniteZoomController() {
               pointerIdRef.current = null;
               setDragIndex(null);
             }}
-            aria-label={`Текущий этап: ${markerLayer.title}. Перетащите для перехода.`}
+            aria-label={`Текущий этап: ${markerLayer.title}. Можно перетащить для перехода.`}
           >
-            <MarkerIcon size={21} />
+            <MarkerIcon size={20} />
           </button>
         </div>
       </div>
     </nav>,
-    mountNode,
+    document.body,
   );
 }
