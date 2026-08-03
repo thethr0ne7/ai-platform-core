@@ -180,6 +180,7 @@ function EvidenceTaskCard({
   const [notes, setNotes] = useState(task.task_notes ?? "");
   const canVerify = task.task_type === "quote_locator" && task.evidence_tier === "A" && task.owner_validation_status === "verified" && Boolean(task.source_version_id);
   const hasMachineCandidate = task.task_type === "quote_locator" && Boolean(task.candidate_quote);
+  const sourceReady = task.source_ready === true;
 
   return (
     <article className="glass-surface min-w-0 rounded-[28px] p-4 sm:p-6">
@@ -189,10 +190,12 @@ function EvidenceTaskCard({
           <h2 className="mt-2 break-words text-xl font-semibold leading-7">{task.task_title}</h2>
           <p className="mt-2 break-words text-sm leading-6 text-mist/55">{task.measure_title}</p>
         </div>
-        <div className="flex flex-wrap gap-2 sm:max-w-52 sm:justify-end">
+        <div className="flex flex-wrap gap-2 sm:max-w-64 sm:justify-end">
           <StatusChip value={task.task_status} />
           {hasMachineCandidate ? <span className="status-chip">Совпадение найдено машиной</span> : null}
           <span className={`status-chip ${task.evidence_tier === "A" ? "status-chip-active" : ""}`}>Tier {task.evidence_tier ?? "—"}</span>
+          <span className={`status-chip ${sourceReady ? "status-chip-active" : ""}`}>{sourceReady ? "Источник готов" : "Источник не готов"}</span>
+          <span className="status-chip">{formatAge(task.age_seconds)}</span>
         </div>
       </div>
 
@@ -201,6 +204,8 @@ function EvidenceTaskCard({
         <Info title="Ожидаемое значение" value={displayValue(task.expected_value)} />
         <Info title="Документ" value={task.document_title ?? "Документ не привязан"} />
         <Info title="Владелец источника" value={task.owner_validation_status === "verified" ? "Подтверждён" : "Не подтверждён"} />
+        <Info title="Возраст задачи" value={formatAge(task.age_seconds)} />
+        <Info title="Причина блокировки" value={blockerLabel(task.blocker_reason)} />
       </div>
 
       {hasMachineCandidate ? <div className="mt-4 rounded-[18px] border border-signal/20 bg-signal/[.035] p-4 text-sm leading-6 text-mist/60"><strong className="text-signal">Важно:</strong> система нашла буквальный фрагмент и подготовила поля ниже. Это ещё не юридическое подтверждение — проверьте смысл, редакцию документа и locator.</div> : null}
@@ -230,7 +235,7 @@ function EvidenceTaskCard({
         {["blocked", "rejected"].includes(task.task_status) ? <button className="secondary-cta" disabled={disabled} onClick={() => onReview({ decision: "reopened", notes })}><RotateCcw size={15} /> Вернуть</button> : null}
       </div>
 
-      {!canVerify && task.task_type === "quote_locator" ? <p className="mt-3 flex items-start gap-2 text-xs leading-5 text-mist/40"><CircleAlert className="mt-0.5 shrink-0" size={14} /> Подтверждение недоступно, пока документ не имеет Tier A, проверенного владельца и сохранённой текстовой версии.</p> : null}
+      {!canVerify && task.task_type === "quote_locator" ? <p className="mt-3 flex items-start gap-2 text-xs leading-5 text-mist/40"><CircleAlert className="mt-0.5 shrink-0" size={14} /> Подтверждение недоступно: {blockerLabel(task.blocker_reason).toLocaleLowerCase("ru-RU")}.</p> : null}
     </article>
   );
 }
@@ -270,6 +275,31 @@ function roleLabel(role: string | null | undefined) {
   if (role === "owner") return "владелец";
   if (role === "auditor") return "аудитор";
   return "эксперт";
+}
+
+function formatAge(seconds: number | null | undefined) {
+  if (!Number.isFinite(seconds)) return "Возраст не рассчитан";
+  const safeSeconds = Math.max(0, Number(seconds));
+  const days = Math.floor(safeSeconds / 86400);
+  if (days > 0) return `${days} дн.`;
+  const hours = Math.floor(safeSeconds / 3600);
+  if (hours > 0) return `${hours} ч.`;
+  const minutes = Math.floor(safeSeconds / 60);
+  return `${Math.max(1, minutes)} мин.`;
+}
+
+function blockerLabel(value: string | null | undefined) {
+  const labels: Record<string, string> = {
+    source_document_missing: "Документ не привязан",
+    source_tier_not_a: "Нужна публикация Tier A",
+    source_owner_not_verified: "Владелец источника не подтверждён",
+    source_version_missing: "Нет сохранённой версии",
+    source_text_missing: "Нет извлечённого текста",
+    candidate_quote_missing: "Нет точной цитаты",
+    candidate_locator_missing: "Нет точного locator",
+    source_version_changed: "Источник изменился — нужна повторная проверка",
+  };
+  return value ? labels[value] ?? value : "Блокирующих причин нет";
 }
 
 function reviewSuccessMessage(decision: ReviewInput["decision"]) {
