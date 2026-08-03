@@ -64,6 +64,38 @@ export type CatalogueControlStatus = {
   projects: CatalogueProject[];
 };
 
+function isResponseLike(value: unknown): value is Response {
+  return Boolean(
+    value
+      && typeof value === "object"
+      && typeof (value as { clone?: unknown }).clone === "function",
+  );
+}
+
+async function readCatalogueError(error: unknown): Promise<Error> {
+  const fallback = error instanceof Error
+    ? error.message
+    : "Не удалось обратиться к контуру каталога.";
+  const context = (error as { context?: unknown } | null)?.context;
+
+  if (!isResponseLike(context)) return new Error(fallback);
+
+  try {
+    const payload = await context.clone().json() as { error?: unknown; message?: unknown };
+    if (typeof payload.error === "string" && payload.error.trim()) return new Error(payload.error);
+    if (typeof payload.message === "string" && payload.message.trim()) return new Error(payload.message);
+  } catch {
+    try {
+      const responseText = await context.clone().text();
+      if (responseText.trim()) return new Error(responseText);
+    } catch {
+      // Preserve the original SDK error when the response body is unavailable.
+    }
+  }
+
+  return new Error(fallback);
+}
+
 async function invokeCatalogueControl<T>(body: Record<string, unknown>): Promise<T> {
   const initData = getTelegramInitData();
   if (!initData) throw new Error("Откройте контур каталога через Telegram-бота @stateappstartup_bot.");
@@ -72,19 +104,7 @@ async function invokeCatalogueControl<T>(body: Record<string, unknown>): Promise
     body: { initData, ...body },
   });
 
-  if (error) {
-    const context = (error as { context?: Response } | null)?.context;
-    if (context) {
-      try {
-        const payload = await context.clone().json() as { error?: unknown };
-        if (typeof payload.error === "string") throw new Error(payload.error);
-      } catch (nested) {
-        if (nested instanceof Error && nested.message !== "Unexpected end of JSON input") throw nested;
-      }
-    }
-    throw error;
-  }
-
+  if (error) throw await readCatalogueError(error);
   if (data?.error) throw new Error(String(data.error));
   return data as T;
 }
