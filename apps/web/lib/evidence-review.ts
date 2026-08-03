@@ -33,6 +33,9 @@ export type EvidenceReviewTask = {
   source_version_id: string | null;
   source_text_excerpt: string;
   created_at: string;
+  age_seconds: number;
+  blocker_reason: string | null;
+  source_ready: boolean;
 };
 
 export type EvidenceReviewerStatus = {
