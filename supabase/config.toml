@@ -33,5 +33,8 @@ verify_jwt = false
 [functions.project-fact-review]
 verify_jwt = false
 
+[functions.reviewer-intelligence-api]
+verify_jwt = false
+
 [functions.telegram-project-api]
 verify_jwt = false
