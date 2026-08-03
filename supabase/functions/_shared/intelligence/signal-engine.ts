@@ -52,6 +52,68 @@ function sourceLookup(report: Record<string, unknown>): Map<string, string> {
   return lookup;
 }
 
+function stableSourceIdentity(values: unknown[], sourceId?: string): string {
+  if (sourceId) return `source:${sourceId}`;
+  for (const value of values) {
+    const normalized = normalizeKey(text(value));
+    if (normalized) return normalized.slice(0, 240);
+  }
+  return "source:unknown";
+}
+
+function semanticSignalKey(input: {
+  projectId: string;
+  type: SignalType;
+  sourceIdentity: string;
+  title: string;
+  summary: string;
+  level: string;
+  region?: string;
+  sectors: string[];
+  subject?: string;
+}): string {
+  const sectors = [...input.sectors].map(normalizeKey).filter(Boolean).sort().join(",");
+  const subject = normalizeKey(input.subject || `${input.title} ${input.summary}`).slice(0, 320);
+  return [
+    input.projectId,
+    input.type,
+    input.sourceIdentity,
+    normalizeKey(input.level),
+    normalizeKey(input.region || ""),
+    sectors,
+    subject,
+  ].join(":");
+}
+
+function earliest(left: string, right: string): string {
+  if (!left) return right;
+  if (!right) return left;
+  return left < right ? left : right;
+}
+
+function latest(left: string | undefined, right: string | undefined): string | undefined {
+  if (!left) return right;
+  if (!right) return left;
+  return left > right ? left : right;
+}
+
+function mergeSignal(previous: RuntimeSignal, next: RuntimeSignal): RuntimeSignal {
+  const preferred = next.confidence > previous.confidence ? next : previous;
+  const evidenceIds = Array.from(new Set([...previous.evidenceIds, ...next.evidenceIds]));
+  return {
+    ...preferred,
+    key: previous.key,
+    sourceId: previous.sourceId ?? next.sourceId,
+    sourceSnapshotId: previous.sourceSnapshotId ?? next.sourceSnapshotId,
+    evidenceId: previous.evidenceId ?? next.evidenceId,
+    firstDetectedAt: earliest(previous.firstDetectedAt, next.firstDetectedAt),
+    lastConfirmedAt: latest(previous.lastConfirmedAt, next.lastConfirmedAt),
+    evidenceIds,
+    confidence: Math.max(previous.confidence, next.confidence),
+    truthStatus: previous.truthStatus === "verified" || next.truthStatus === "verified" ? "verified" : "unverified",
+  };
+}
+
 export function buildEvents(context: IntelligenceContext): RuntimeEvent[] {
   const lookup = sourceLookup(context.report);
   return asRecords(context.report.source_changes).map((change) => {
@@ -88,7 +150,7 @@ export function detectSignals(context: IntelligenceContext): RuntimeSignal[] {
 
   const add = (signal: RuntimeSignal) => {
     const previous = signals.get(signal.key);
-    if (!previous || signal.confidence > previous.confidence) signals.set(signal.key, signal);
+    signals.set(signal.key, previous ? mergeSignal(previous, signal) : signal);
   };
 
   for (const existing of asRecords(report.intelligence_signals)) {
@@ -100,7 +162,30 @@ export function detectSignals(context: IntelligenceContext): RuntimeSignal[] {
     const firstDetectedAt = text(existing.first_detected_at) || new Date().toISOString();
     const evidenceIds = asStrings(existing.evidence_ids);
     const evidenceId = text(existing.evidence_id) || evidenceIds[0];
-    const key = text(existing.signal_key) || `${context.projectId}:${inferred.type}:${normalizeKey(text(existing.title) || firstDetectedAt)}`;
+    const sectors = asStrings(existing.sectors);
+    const level = levelOf(existing.level);
+    const title = text(existing.title) || inferred.title;
+    const summary = text(existing.summary);
+    const region = text(existing.region);
+    const sourceIdentity = stableSourceIdentity([
+      existing.source_id,
+      existing.source_key,
+      existing.source_name,
+      existing.authority,
+      existing.document_url,
+      summary,
+    ], sourceId);
+    const key = semanticSignalKey({
+      projectId: context.projectId,
+      type: inferred.type,
+      sourceIdentity,
+      title,
+      summary,
+      level,
+      region,
+      sectors,
+      subject: text(existing.document_url) || text(existing.document_title) || `${title} ${summary}`,
+    });
 
     add({
       projectId: context.projectId,
@@ -110,11 +195,11 @@ export function detectSignals(context: IntelligenceContext): RuntimeSignal[] {
       ...(evidenceId ? { evidenceId } : {}),
       key,
       type: inferred.type,
-      title: text(existing.title) || inferred.title,
-      summary: text(existing.summary),
-      level: levelOf(existing.level),
-      ...(text(existing.region) ? { region: text(existing.region) } : {}),
-      sectors: asStrings(existing.sectors),
+      title,
+      summary,
+      level,
+      ...(region ? { region } : {}),
+      sectors,
       firstDetectedAt,
       ...(text(existing.last_confirmed_at) ? { lastConfirmedAt: text(existing.last_confirmed_at) } : {}),
       evidenceIds,
@@ -132,7 +217,29 @@ export function detectSignals(context: IntelligenceContext): RuntimeSignal[] {
     const sourceId = lookup.get(normalizeKey(text(change.source_name))) ?? lookup.get(normalizeKey(text(change.authority)));
     const detectedAt = text(change.detected_at) || new Date().toISOString();
     const evidenceId = text(change.evidence_id);
-    const key = `${context.projectId}:${inferred.type}:${normalizeKey(text(change.id) || text(change.document_url) || detectedAt)}`;
+    const sectors = asStrings(change.sectors);
+    const level = levelOf(change.level);
+    const title = inferred.title;
+    const summary = text(change.summary) || `Сигнал выявлен в изменении документа «${text(change.document_title)}».`;
+    const region = text(change.region);
+    const sourceIdentity = stableSourceIdentity([
+      change.source_id,
+      change.source_key,
+      change.document_url,
+      change.source_name,
+      change.authority,
+    ], sourceId);
+    const key = semanticSignalKey({
+      projectId: context.projectId,
+      type: inferred.type,
+      sourceIdentity,
+      title,
+      summary,
+      level,
+      region,
+      sectors,
+      subject: `${text(change.change_type)} ${text(change.document_url)} ${text(change.document_title)}`,
+    });
 
     add({
       projectId: context.projectId,
@@ -142,11 +249,11 @@ export function detectSignals(context: IntelligenceContext): RuntimeSignal[] {
       ...(evidenceId ? { evidenceId } : {}),
       key,
       type: inferred.type,
-      title: inferred.title,
-      summary: text(change.summary) || `Сигнал выявлен в изменении документа «${text(change.document_title)}».`,
-      level: levelOf(change.level),
-      ...(text(change.region) ? { region: text(change.region) } : {}),
-      sectors: asStrings(change.sectors),
+      title,
+      summary,
+      level,
+      ...(region ? { region } : {}),
+      sectors,
       firstDetectedAt: detectedAt,
       lastConfirmedAt: detectedAt,
       evidenceIds: evidenceId ? [evidenceId] : [],
@@ -158,5 +265,8 @@ export function detectSignals(context: IntelligenceContext): RuntimeSignal[] {
     });
   }
 
-  return Array.from(signals.values());
+  return Array.from(signals.values()).sort((left, right) => {
+    const confirmed = (right.lastConfirmedAt || right.firstDetectedAt).localeCompare(left.lastConfirmedAt || left.firstDetectedAt);
+    return confirmed || right.confidence - left.confidence;
+  });
 }

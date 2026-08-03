@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -31,7 +32,26 @@ ALLOWED_FILE_HOSTS = {
     "government.ru",
     "www.government.ru",
 }
-USER_AGENT = "ai-platform-core-legal-ocr/0.68 (GitHub Actions; official documents only)"
+USER_AGENT = "ai-platform-core-legal-ocr/0.69 (GitHub Actions; official documents only)"
+TOKEN_PATTERN = re.compile(r"[A-Za-zА-Яа-яЁё][A-Za-zА-Яа-яЁё0-9_-]*")
+CYRILLIC_PATTERN = re.compile(r"[А-Яа-яЁё]")
+LATIN_PATTERN = re.compile(r"[A-Za-z]")
+CONFUSABLE_LATIN = frozenset("ABCEHKMOPTXYabcehkmoptxy")
+LATIN_ALLOWLIST = {
+    "api",
+    "csv",
+    "doc",
+    "docx",
+    "http",
+    "https",
+    "ocr",
+    "pdf",
+    "png",
+    "txt",
+    "url",
+    "www",
+    "xml",
+}
 
 
 def main() -> int:
@@ -54,13 +74,17 @@ def main() -> int:
                     "extracted_text": result["combined_text"],
                     "pages": result["pages"],
                     "confidence": result["confidence"],
-                    "engine": "ocrmypdf-tesseract-rus-eng-v0.68",
+                    "engine": result["engine"],
                     "metadata": {
                         **runner_metadata(),
                         "source_sha256": result["source_sha256"],
                         "page_count": result["page_count"],
                         "duration_seconds": round(time.monotonic() - started, 3),
                         "ocr_command": result["ocr_command"],
+                        "requested_language": result["requested_language"],
+                        "actual_language": result["actual_language"],
+                        "script_quality": result["script_quality"],
+                        "requires_manual_review": result["requires_manual_review"],
                     },
                 },
                 timeout=180,
@@ -73,6 +97,7 @@ def main() -> int:
                         "page_count": result["page_count"],
                         "characters": len(result["combined_text"]),
                         "confidence": result["confidence"],
+                        "requires_manual_review": result["requires_manual_review"],
                         "broker_result": response.get("result", {}),
                     },
                     ensure_ascii=False,
@@ -115,7 +140,8 @@ def process_job(job: dict[str, Any]) -> dict[str, Any]:
 
         source_hash = sha256_file(source_path)
         page_count = validate_pdf(source_path)
-        language = normalize_language(str(job.get("language") or "rus+eng"))
+        requested_language = normalize_language(str(job.get("language") or "rus"))
+        actual_language = select_legal_language(requested_language)
 
         command = [
             shutil.which("ocrmypdf") or "ocrmypdf",
@@ -123,7 +149,7 @@ def process_job(job: dict[str, Any]) -> dict[str, Any]:
             "--deskew",
             "--rotate-pages",
             "--language",
-            language,
+            actual_language,
             "--output-type",
             "pdf",
             "--optimize",
@@ -150,14 +176,29 @@ def process_job(job: dict[str, Any]) -> dict[str, Any]:
         if len(combined_text) < 80:
             raise RuntimeError("ocr_output_too_short")
 
-        confidence = estimate_confidence(combined_text, page_count)
+        script_quality = analyse_script_quality(combined_text)
+        confidence = estimate_confidence(combined_text, page_count, script_quality)
+        requires_manual_review = bool(
+            script_quality["mixed_script_tokens"]
+            or script_quality["suspicious_latin_tokens"] >= 3
+            or confidence < 0.7
+        )
+        engine = f"ocrmypdf-tesseract-{actual_language.replace('+', '-')}-v0.69"
         return {
             "source_sha256": source_hash,
             "page_count": page_count,
             "pages": pages,
             "combined_text": combined_text,
             "confidence": confidence,
-            "ocr_command": "ocrmypdf --force-ocr --deskew --rotate-pages --language rus+eng",
+            "engine": engine,
+            "requested_language": requested_language,
+            "actual_language": actual_language,
+            "script_quality": script_quality,
+            "requires_manual_review": requires_manual_review,
+            "ocr_command": (
+                "ocrmypdf --force-ocr --deskew --rotate-pages "
+                f"--language {actual_language}"
+            ),
         }
 
 
@@ -251,15 +292,59 @@ def extract_pages(path: Path) -> list[dict[str, str]]:
     return pages
 
 
-def estimate_confidence(text: str, page_count: int) -> float:
+def analyse_script_quality(text: str) -> dict[str, Any]:
+    tokens = TOKEN_PATTERN.findall(text)
+    alphabetic = [character for character in text if character.isalpha()]
+    cyrillic_count = sum(bool(CYRILLIC_PATTERN.fullmatch(character)) for character in alphabetic)
+    latin_count = sum(bool(LATIN_PATTERN.fullmatch(character)) for character in alphabetic)
+    alphabetic_count = max(1, len(alphabetic))
+    cyrillic_share = cyrillic_count / alphabetic_count
+    latin_share = latin_count / alphabetic_count
+
+    mixed: list[str] = []
+    suspicious_latin: list[str] = []
+    for token in tokens:
+        has_cyrillic = bool(CYRILLIC_PATTERN.search(token))
+        has_latin = bool(LATIN_PATTERN.search(token))
+        if has_cyrillic and has_latin:
+            mixed.append(token)
+            continue
+        normalized = token.lower()
+        if (
+            cyrillic_share >= 0.72
+            and has_latin
+            and not has_cyrillic
+            and normalized not in LATIN_ALLOWLIST
+            and len(token) >= 4
+            and all(character in CONFUSABLE_LATIN or character.isdigit() or character in "_-" for character in token)
+        ):
+            suspicious_latin.append(token)
+
+    token_count = max(1, len(tokens))
+    return {
+        "alphabetic_characters": len(alphabetic),
+        "cyrillic_share": round(cyrillic_share, 4),
+        "latin_share": round(latin_share, 4),
+        "mixed_script_tokens": len(mixed),
+        "mixed_script_ratio": round(len(mixed) / token_count, 6),
+        "mixed_script_examples": mixed[:12],
+        "suspicious_latin_tokens": len(suspicious_latin),
+        "suspicious_latin_examples": suspicious_latin[:12],
+    }
+
+
+def estimate_confidence(text: str, page_count: int, script_quality: dict[str, Any]) -> float:
     compact = "".join(character for character in text if not character.isspace())
     if not compact:
         return 0.0
     readable = sum(character.isalnum() or character in ".,;:()№%-/«»\"'" for character in compact)
     readable_ratio = readable / len(compact)
     density = min(1.0, len(compact) / max(1, page_count * 900))
-    score = 0.45 + readable_ratio * 0.25 + density * 0.15
-    return round(min(0.85, max(0.35, score)), 4)
+    mixed_ratio = float(script_quality.get("mixed_script_ratio") or 0.0)
+    suspicious_count = int(script_quality.get("suspicious_latin_tokens") or 0)
+    script_penalty = min(0.28, mixed_ratio * 4.0 + min(0.12, suspicious_count * 0.012))
+    score = 0.45 + readable_ratio * 0.25 + density * 0.15 - script_penalty
+    return round(min(0.85, max(0.25, score)), 4)
 
 
 def validate_file_url(value: str) -> None:
@@ -272,8 +357,15 @@ def validate_file_url(value: str) -> None:
 
 
 def normalize_language(value: str) -> str:
-    cleaned = "+".join(part for part in value.lower().split("+") if part in {"rus", "eng"})
-    return cleaned or "rus+eng"
+    parts = [part for part in value.lower().split("+") if part in {"rus", "eng"}]
+    if not parts:
+        return "rus"
+    return "+".join(dict.fromkeys(parts))
+
+
+def select_legal_language(requested: str) -> str:
+    # Official Russian legal documents must not enable English unless the task is explicitly English-only.
+    return "eng" if requested == "eng" else "rus"
 
 
 def normalize_text(value: str) -> str:
