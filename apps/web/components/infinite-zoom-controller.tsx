@@ -138,6 +138,7 @@ export function InfiniteZoomController() {
 
   useEffect(() => {
     if (!workspace) return;
+    const originalDisplays = originalDisplaysRef.current;
 
     const applyLayer = () => {
       const originalNavigation = workspace.querySelector<HTMLElement>(".report-nav");
@@ -159,8 +160,8 @@ export function InfiniteZoomController() {
       const nextStart = boundaries.find((index) => index > start) ?? contentChildren.length;
 
       contentChildren.forEach((element, index) => {
-        if (!originalDisplaysRef.current.has(element)) {
-          originalDisplaysRef.current.set(element, {
+        if (!originalDisplays.has(element)) {
+          originalDisplays.set(element, {
             value: element.style.getPropertyValue("display"),
             priority: element.style.getPropertyPriority("display"),
           });
@@ -169,7 +170,7 @@ export function InfiniteZoomController() {
         const inActiveRange = start < 0 || (index >= start && index < nextStart);
         const hiddenAsMonitoringNoise = activeLayer === "report-evidence" && isMonitoringNoise(element);
         const visible = inActiveRange && !hiddenAsMonitoringNoise;
-        const original = originalDisplaysRef.current.get(element);
+        const original = originalDisplays.get(element);
 
         if (visible) {
           if (original?.value) {
@@ -191,7 +192,7 @@ export function InfiniteZoomController() {
 
     return () => {
       observer.disconnect();
-      for (const [element, original] of originalDisplaysRef.current.entries()) {
+      for (const [element, original] of originalDisplays.entries()) {
         if (original.value) {
           element.style.setProperty("display", original.value, original.priority);
         } else {
@@ -199,7 +200,7 @@ export function InfiniteZoomController() {
         }
         element.removeAttribute("aria-hidden");
       }
-      originalDisplaysRef.current.clear();
+      originalDisplays.clear();
     };
   }, [activeLayer, workspace]);
 
