@@ -53,6 +53,12 @@ type LayerId = (typeof layers)[number]["id"];
 type DisplaySnapshot = { value: string; priority: string };
 
 const DEFAULT_LAYER: LayerId = "report-actions";
+const ACTIONS_SECONDARY_HEADINGS = new Set([
+  "Подключённые возможности",
+  "Государственные приоритеты",
+  "Особенности территории",
+  "Официальные источники отчёта",
+]);
 const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
 
@@ -60,12 +66,21 @@ function isLayerId(value: string): value is LayerId {
   return layers.some((layer) => layer.id === value);
 }
 
-function isMonitoringNoise(element: HTMLElement): boolean {
-  const headings = Array.from(element.querySelectorAll("h2, h3"))
-    .map((heading) => heading.textContent?.trim())
+function elementHeadings(element: HTMLElement): string[] {
+  return Array.from(element.querySelectorAll("h2, h3"))
+    .map((heading) => heading.textContent?.trim() ?? "")
     .filter(Boolean);
-  return headings.some((heading) =>
+}
+
+function isMonitoringNoise(element: HTMLElement): boolean {
+  return elementHeadings(element).some((heading) =>
     heading === "Новые изменения" || heading === "Аналитические сигналы"
+  );
+}
+
+function isActionsSecondaryDetail(element: HTMLElement): boolean {
+  return elementHeadings(element).some((heading) =>
+    ACTIONS_SECONDARY_HEADINGS.has(heading)
   );
 }
 
@@ -169,7 +184,8 @@ export function InfiniteZoomController() {
 
         const inActiveRange = start < 0 || (index >= start && index < nextStart);
         const hiddenAsMonitoringNoise = activeLayer === "report-evidence" && isMonitoringNoise(element);
-        const visible = inActiveRange && !hiddenAsMonitoringNoise;
+        const hiddenAsActionsSecondary = activeLayer === "report-actions" && isActionsSecondaryDetail(element);
+        const visible = inActiveRange && !hiddenAsMonitoringNoise && !hiddenAsActionsSecondary;
         const original = originalDisplays.get(element);
 
         if (visible) {
