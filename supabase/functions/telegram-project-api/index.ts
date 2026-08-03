@@ -8,6 +8,8 @@ const DEFAULT_ALLOWED_ORIGINS = new Set([
 ]);
 
 const PROJECT_VERCEL_ORIGIN = /^https:\/\/ai-platform-core(?:-[a-z0-9-]+)?-63-gginner\.vercel\.app$/;
+const DOCUMENT_BUCKET = "gi-project-documents";
+const DOWNLOAD_URL_TTL_SECONDS = 300;
 
 type TelegramUser = {
   id: number;
@@ -159,24 +161,54 @@ Deno.serve(async (req) => {
       if (ownedError) throw ownedError;
       if (!owned) return json(req, { error: "Проект не найден" }, 404);
       const path = `${user.id}/${projectId}/${crypto.randomUUID()}-${safeFileName(fileName)}`;
-      const { data, error } = await supabase.storage.from("gi-project-documents").createSignedUploadUrl(path);
+      const { data, error } = await supabase.storage.from(DOCUMENT_BUCKET).createSignedUploadUrl(path);
       if (error) throw error;
       return json(req, { path, token: data.token, signedUrl: data.signedUrl });
     }
 
+    if (action === "create_download_url") {
+      const documentId = String(payload.documentId ?? "");
+      if (!documentId) return json(req, { error: "Не указан документ" }, 400);
+      const { data: document, error: documentError } = await supabase.from("gi_project_documents")
+        .select("id,storage_path,file_name,mime_type")
+        .eq("id", documentId)
+        .eq("telegram_user_id", user.id)
+        .maybeSingle();
+      if (documentError) throw documentError;
+      if (!document?.storage_path) return json(req, { error: "Документ не найден" }, 404);
+
+      const { data, error } = await supabase.storage
+        .from(DOCUMENT_BUCKET)
+        .createSignedUrl(document.storage_path, DOWNLOAD_URL_TTL_SECONDS, {
+          download: document.file_name || true,
+        });
+      if (error) throw error;
+      return json(req, {
+        url: data.signedUrl,
+        expiresIn: DOWNLOAD_URL_TTL_SECONDS,
+        fileName: document.file_name,
+        mimeType: document.mime_type,
+      });
+    }
+
     if (action === "register_document") {
       const row = payload.document ?? {};
+      const projectId = String(row.projectId ?? "");
+      const storagePath = String(row.storagePath ?? "");
       const { data: owned } = await supabase.from("gi_projects").select("id")
-        .eq("id", String(row.projectId ?? ""))
+        .eq("id", projectId)
         .eq("telegram_user_id", user.id)
         .maybeSingle();
       if (!owned) return json(req, { error: "Проект не найден" }, 404);
+      if (!storagePath.startsWith(`${user.id}/${projectId}/`)) {
+        return json(req, { error: "Некорректный путь документа" }, 400);
+      }
       const { data, error } = await supabase.from("gi_project_documents").insert({
-        project_id: String(row.projectId),
+        project_id: projectId,
         telegram_user_id: user.id,
         category: String(row.category ?? "Другое"),
         file_name: String(row.fileName ?? "Файл"),
-        storage_path: String(row.storagePath ?? ""),
+        storage_path: storagePath,
         mime_type: row.mimeType ? String(row.mimeType) : null,
         byte_size: Number(row.byteSize ?? 0),
       }).select("*").single();
@@ -193,7 +225,7 @@ Deno.serve(async (req) => {
         .maybeSingle();
       if (documentError) throw documentError;
       if (!document) return json(req, { error: "Документ не найден" }, 404);
-      const storageResult = await supabase.storage.from("gi-project-documents").remove([document.storage_path]);
+      const storageResult = await supabase.storage.from(DOCUMENT_BUCKET).remove([document.storage_path]);
       if (storageResult.error) throw storageResult.error;
       const { error } = await supabase.from("gi_project_documents").delete().eq("id", documentId).eq("telegram_user_id", user.id);
       if (error) throw error;
