@@ -1,15 +1,13 @@
 begin;
 
--- Gate B / #112: bind every active measure to a source document, invalidate
--- human verification when a newer source version appears, and expose backlog
--- age/blocker/readiness without weakening the human-review gate.
+-- Gate B / #112: bind every measure to source provenance, invalidate human
+-- verification when a newer source version appears, and expose reviewer
+-- backlog age/blocker/readiness without weakening the human-review gate.
 do $precheck$
 declare
   v_missing_measure_sources integer;
-  v_rural_measure_id uuid;
-  v_rural_source_id uuid;
-  v_source_url text;
-  v_owner_status text;
+  v_rural_measure_count integer;
+  v_rural_source_count integer;
 begin
   select count(*) into v_missing_measure_sources
   from public.gi_support_measures
@@ -21,31 +19,39 @@ begin
       v_missing_measure_sources;
   end if;
 
-  select id into v_rural_measure_id
+  select count(*) into v_rural_measure_count
   from public.gi_support_measures
-  where code='FED_RURAL_TERRITORIES_INFRASTRUCTURE';
+  where code='FED_RURAL_TERRITORIES_INFRASTRUCTURE'
+    and source_document_id is null;
 
-  if v_rural_measure_id is null then
-    raise exception 'Gate B precondition failed: rural measure not found';
+  if v_rural_measure_count <> 1 then
+    raise exception
+      'Gate B precondition failed: expected one unbound rural measure, found %',
+      v_rural_measure_count;
   end if;
 
-  select id,canonical_url,owner_validation_status
-  into v_rural_source_id,v_source_url,v_owner_status
+  select count(*) into v_rural_source_count
   from public.gi_source_documents
-  where id='9f49afdc-eaa7-42eb-aa0f-6cf900023dce'::uuid;
+  where canonical_url='https://government.ru/rugovclassifier/878/'
+    and owner_validation_status='verified';
 
-  if v_rural_source_id is null
-     or v_source_url <> 'https://government.ru/rugovclassifier/878/'
-     or v_owner_status <> 'verified' then
+  if v_rural_source_count <> 1 then
     raise exception
-      'Gate B precondition failed: deterministic rural programme source is unavailable or changed';
+      'Gate B precondition failed: expected one verified official rural programme source, found %',
+      v_rural_source_count;
   end if;
 end;
 $precheck$;
 
-update public.gi_support_measures
-set source_document_id='9f49afdc-eaa7-42eb-aa0f-6cf900023dce'::uuid,
-    metadata=coalesce(metadata,'{}'::jsonb)||jsonb_build_object(
+with source_document as (
+  select id
+  from public.gi_source_documents
+  where canonical_url='https://government.ru/rugovclassifier/878/'
+    and owner_validation_status='verified'
+)
+update public.gi_support_measures m
+set source_document_id=source_document.id,
+    metadata=coalesce(m.metadata,'{}'::jsonb)||jsonb_build_object(
       'source_binding','official_government_programme_page',
       'source_binding_at',now(),
       'source_tier','B',
@@ -53,12 +59,13 @@ set source_document_id='9f49afdc-eaa7-42eb-aa0f-6cf900023dce'::uuid,
       'verification_state','source_bound_unverified'
     ),
     updated_at=now()
-where code='FED_RURAL_TERRITORIES_INFRASTRUCTURE'
-  and source_document_id is null;
+from source_document
+where m.code='FED_RURAL_TERRITORIES_INFRASTRUCTURE'
+  and m.source_document_id is null;
 
 update public.gi_measure_requirements r
 set metadata=coalesce(r.metadata,'{}'::jsonb)||jsonb_build_object(
-      'source_document_id','9f49afdc-eaa7-42eb-aa0f-6cf900023dce',
+      'source_document_id',m.source_document_id::text,
       'source_binding','official_government_programme_page',
       'tier_a_required_for_verification',true
     ),
@@ -68,7 +75,7 @@ where r.measure_id=m.id
   and m.code='FED_RURAL_TERRITORIES_INFRASTRUCTURE';
 
 update public.gi_evidence_verification_queue q
-set source_document_id='9f49afdc-eaa7-42eb-aa0f-6cf900023dce'::uuid,
+set source_document_id=m.source_document_id,
     result=coalesce(q.result,'{}'::jsonb)||jsonb_build_object(
       'source_binding','official_government_programme_page',
       'blocker_reason','source_tier_not_a',
@@ -76,7 +83,10 @@ set source_document_id='9f49afdc-eaa7-42eb-aa0f-6cf900023dce'::uuid,
     ),
     notes=case
       when q.status='blocked' then coalesce(q.notes,'')
-      else coalesce(q.notes,'Официальная страница программы привязана; для human verification требуется Tier A публикация и сохранённая версия.')
+      else coalesce(
+        q.notes,
+        'Официальная страница программы привязана; для human verification требуется Tier A публикация и сохранённая версия.'
+      )
     end,
     updated_at=now()
 from public.gi_support_measures m
@@ -141,10 +151,10 @@ begin
     return new;
   end if;
 
-  -- Historical backfills or duplicate-content snapshots do not invalidate the
-  -- current human decision.
+  -- Do not invalidate on historical backfill or an identical snapshot.
   if exists(
-    select 1 from public.gi_source_versions v
+    select 1
+    from public.gi_source_versions v
     where v.document_id=new.document_id
       and v.version_no>new.version_no
   ) or new.content_hash is not distinct from v_previous_version.content_hash then
@@ -289,7 +299,7 @@ create trigger gi_00_evidence_invalidation_on_source_version
 after insert on public.gi_source_versions
 for each row execute function public.gi_invalidate_verified_evidence_on_source_version();
 
--- Replace the reviewer-list RPC with an additive v2 result contract. The Edge
+-- Replace the reviewer-list RPC with an additive result contract. The Edge
 -- Function forwards rows as JSON, so existing consumers remain compatible.
 drop function if exists public.gi_list_evidence_review_tasks(bigint,integer);
 
@@ -329,8 +339,10 @@ set search_path=public,pg_temp
 as $$
 begin
   if not exists(
-    select 1 from public.gi_evidence_reviewers r
-    where r.telegram_user_id=p_reviewer_telegram_id and r.active=true
+    select 1
+    from public.gi_evidence_reviewers r
+    where r.telegram_user_id=p_reviewer_telegram_id
+      and r.active=true
   ) then
     raise exception 'evidence_reviewer_not_allowed';
   end if;
@@ -366,8 +378,10 @@ begin
       when doc.owner_validation_status is distinct from 'verified' then 'source_owner_not_verified'
       when ver.id is null then 'source_version_missing'
       when length(coalesce(ver.extracted_text,''))<20 then 'source_text_missing'
-      when q.task_type='quote_locator' and length(btrim(coalesce(req.evidence_quote,'')))<40 then 'candidate_quote_missing'
-      when q.task_type='quote_locator' and length(btrim(coalesce(req.source_locator,m.source_locator,q.expected_document,'')))<8 then 'candidate_locator_missing'
+      when q.task_type='quote_locator'
+       and length(btrim(coalesce(req.evidence_quote,'')))<40 then 'candidate_quote_missing'
+      when q.task_type='quote_locator'
+       and length(btrim(coalesce(req.source_locator,m.source_locator,q.expected_document,'')))<8 then 'candidate_locator_missing'
       else null
     end,
     (
@@ -425,7 +439,9 @@ begin
   where source_document_id is null;
 
   if v_missing_sources<>0 then
-    raise exception 'Gate B postcondition failed: % measures still lack source_document_id',v_missing_sources;
+    raise exception
+      'Gate B postcondition failed: % measures still lack source_document_id',
+      v_missing_sources;
   end if;
 
   select count(*) into v_trigger_count
@@ -442,7 +458,8 @@ begin
   end if;
 
   select pg_get_functiondef(p.oid) into v_rpc_definition
-  from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+  from pg_proc p
+  join pg_namespace n on n.oid=p.pronamespace
   where n.nspname='public'
     and p.proname='gi_list_evidence_review_tasks'
     and pg_get_function_identity_arguments(p.oid)=
@@ -455,7 +472,8 @@ begin
   end if;
 
   select pg_get_functiondef(p.oid) into v_match_definition
-  from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+  from pg_proc p
+  join pg_namespace n on n.oid=p.pronamespace
   where n.nspname='public'
     and p.proname='gi_evaluate_project_measures'
     and pg_get_function_identity_arguments(p.oid)=
