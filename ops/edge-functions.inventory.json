@@ -1,0 +1,247 @@
+{
+  "schema_version": 1,
+  "captured_at": "2026-08-02T19:15:00Z",
+  "project_ref": "hgivyjjethjwswjrvroy",
+  "repository": "thethr0ne7/ai-platform-core",
+  "baseline_commit": "c6e6fa35a485b7809b538feef44777df5371fdaf",
+  "production_function_count": 21,
+  "repository_managed_count": 10,
+  "functions": [
+    {
+      "slug": "university-ingest",
+      "version": 10,
+      "status": "ACTIVE",
+      "verify_jwt": true,
+      "product": "proidu_legacy_candidate",
+      "repository_path": null,
+      "repository_state": "unmanaged",
+      "auth_contract": "supabase_jwt",
+      "decision": "investigate_isolate_or_retire"
+    },
+    {
+      "slug": "search",
+      "version": 6,
+      "status": "ACTIVE",
+      "verify_jwt": false,
+      "product": "proidu_legacy_candidate",
+      "repository_path": null,
+      "repository_state": "unmanaged",
+      "auth_contract": "unknown_custom_auth",
+      "decision": "investigate_isolate_or_retire"
+    },
+    {
+      "slug": "route",
+      "version": 6,
+      "status": "ACTIVE",
+      "verify_jwt": false,
+      "product": "proidu_legacy_candidate",
+      "repository_path": null,
+      "repository_state": "unmanaged",
+      "auth_contract": "unknown_custom_auth",
+      "decision": "investigate_isolate_or_retire"
+    },
+    {
+      "slug": "monitoring-ingest",
+      "version": 6,
+      "status": "ACTIVE",
+      "verify_jwt": true,
+      "product": "proidu_legacy_candidate",
+      "repository_path": null,
+      "repository_state": "unmanaged",
+      "auth_contract": "supabase_jwt",
+      "decision": "investigate_isolate_or_retire"
+    },
+    {
+      "slug": "monitoring-preview",
+      "version": 5,
+      "status": "ACTIVE",
+      "verify_jwt": true,
+      "product": "proidu_legacy_candidate",
+      "repository_path": null,
+      "repository_state": "unmanaged",
+      "auth_contract": "supabase_jwt",
+      "decision": "investigate_isolate_or_retire"
+    },
+    {
+      "slug": "federal-source-bootstrap",
+      "version": 3,
+      "status": "ACTIVE",
+      "verify_jwt": false,
+      "product": "proidu_legacy_candidate",
+      "repository_path": null,
+      "repository_state": "unmanaged",
+      "auth_contract": "unknown_custom_auth",
+      "decision": "investigate_isolate_or_retire"
+    },
+    {
+      "slug": "coverage",
+      "version": 3,
+      "status": "ACTIVE",
+      "verify_jwt": false,
+      "product": "proidu_legacy_candidate",
+      "repository_path": null,
+      "repository_state": "unmanaged",
+      "auth_contract": "unknown_custom_auth",
+      "decision": "investigate_isolate_or_retire"
+    },
+    {
+      "slug": "university-request",
+      "version": 3,
+      "status": "ACTIVE",
+      "verify_jwt": false,
+      "product": "proidu_legacy_candidate",
+      "repository_path": null,
+      "repository_state": "unmanaged",
+      "auth_contract": "unknown_custom_auth",
+      "decision": "investigate_isolate_or_retire"
+    },
+    {
+      "slug": "telegram-payments",
+      "version": 4,
+      "status": "ACTIVE",
+      "verify_jwt": false,
+      "product": "proidu_legacy_candidate",
+      "repository_path": null,
+      "repository_state": "unmanaged",
+      "auth_contract": "telegram_webhook_or_custom_unknown",
+      "decision": "investigate_isolate_or_retire"
+    },
+    {
+      "slug": "telegram-project-api",
+      "version": 4,
+      "status": "ACTIVE",
+      "verify_jwt": false,
+      "product": "ai_platform_core",
+      "repository_path": "supabase/functions/telegram-project-api",
+      "repository_state": "managed",
+      "auth_contract": "telegram_initdata_hmac",
+      "decision": "keep"
+    },
+    {
+      "slug": "telegram-bot-runtime",
+      "version": 1,
+      "status": "ACTIVE",
+      "verify_jwt": false,
+      "product": "unclassified_telegram_runtime",
+      "repository_path": null,
+      "repository_state": "unmanaged",
+      "auth_contract": "unknown_custom_auth",
+      "decision": "investigate_owner_and_source"
+    },
+    {
+      "slug": "telegram-bot-bootstrap",
+      "version": 1,
+      "status": "ACTIVE",
+      "verify_jwt": false,
+      "product": "unclassified_telegram_runtime",
+      "repository_path": null,
+      "repository_state": "unmanaged",
+      "auth_contract": "unknown_custom_auth",
+      "decision": "investigate_owner_and_source"
+    },
+    {
+      "slug": "government-opportunity-api",
+      "version": 10,
+      "status": "ACTIVE",
+      "verify_jwt": false,
+      "product": "ai_platform_core",
+      "repository_path": "supabase/functions/government-opportunity-api",
+      "repository_state": "managed",
+      "auth_contract": "telegram_initdata_hmac",
+      "decision": "keep"
+    },
+    {
+      "slug": "official-source-ingestion",
+      "version": 3,
+      "status": "ACTIVE",
+      "verify_jwt": false,
+      "product": "ai_platform_core",
+      "repository_path": "supabase/functions/official-source-ingestion",
+      "repository_state": "managed",
+      "auth_contract": "internal_scheduler_token",
+      "decision": "keep"
+    },
+    {
+      "slug": "project-document-processor",
+      "version": 2,
+      "status": "ACTIVE",
+      "verify_jwt": false,
+      "product": "ai_platform_core",
+      "repository_path": "supabase/functions/project-document-processor",
+      "repository_state": "managed",
+      "auth_contract": "internal_scheduler_or_service_contract",
+      "decision": "keep"
+    },
+    {
+      "slug": "project-fact-review",
+      "version": 2,
+      "status": "ACTIVE",
+      "verify_jwt": false,
+      "product": "ai_platform_core",
+      "repository_path": "supabase/functions/project-fact-review",
+      "repository_state": "managed",
+      "auth_contract": "telegram_initdata_hmac",
+      "decision": "keep"
+    },
+    {
+      "slug": "evidence-source-processor",
+      "version": 4,
+      "status": "ACTIVE",
+      "verify_jwt": false,
+      "product": "ai_platform_core",
+      "repository_path": "supabase/functions/evidence-source-processor",
+      "repository_state": "managed",
+      "auth_contract": "internal_scheduler_or_service_contract",
+      "decision": "keep"
+    },
+    {
+      "slug": "legal-ocr-broker",
+      "version": 3,
+      "status": "ACTIVE",
+      "verify_jwt": false,
+      "product": "ai_platform_core",
+      "repository_path": "supabase/functions/legal-ocr-broker",
+      "repository_state": "managed",
+      "auth_contract": "github_oidc_rs256",
+      "decision": "keep"
+    },
+    {
+      "slug": "evidence-review",
+      "version": 3,
+      "status": "ACTIVE",
+      "verify_jwt": false,
+      "product": "ai_platform_core",
+      "repository_path": "supabase/functions/evidence-review",
+      "repository_state": "managed",
+      "auth_contract": "telegram_initdata_hmac_plus_reviewer_allowlist",
+      "decision": "keep_and_harden_cors"
+    },
+    {
+      "slug": "measure-direction-enrichment",
+      "version": 2,
+      "status": "ACTIVE",
+      "verify_jwt": false,
+      "product": "ai_platform_core",
+      "repository_path": "supabase/functions/measure-direction-enrichment",
+      "repository_state": "managed",
+      "auth_contract": "telegram_initdata_hmac",
+      "decision": "keep"
+    },
+    {
+      "slug": "catalogue-control",
+      "version": 2,
+      "status": "ACTIVE",
+      "verify_jwt": false,
+      "product": "ai_platform_core",
+      "repository_path": "supabase/functions/catalogue-control",
+      "repository_state": "managed",
+      "auth_contract": "telegram_initdata_hmac_plus_reviewer_allowlist",
+      "decision": "keep"
+    }
+  ],
+  "notes": [
+    "This capture is evidence for issue #95, not an authorization to delete or redeploy functions.",
+    "Auth contracts marked unknown must be verified from deployed source and invocation logs.",
+    "telegram-bot-runtime and telegram-bot-bootstrap are intentionally unclassified rather than assumed legacy."
+  ]
+}
