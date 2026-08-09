@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
+import { corsHeaders, isAllowedOrigin } from "../_shared/cors.ts";
 
 type RequestPayload = {
   action?: "list" | "review" | "summary";
@@ -7,12 +8,6 @@ type RequestPayload = {
   projectId?: string;
   candidateId?: string;
   decision?: "confirmed" | "rejected";
-};
-
-const cors = {
-  "access-control-allow-origin": "*",
-  "access-control-allow-headers": "content-type,authorization,apikey,x-client-info",
-  "access-control-allow-methods": "POST,OPTIONS",
 };
 
 const SUPABASE_URL = mustEnv("SUPABASE_URL");
@@ -23,13 +18,14 @@ const db = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
 });
 
 Deno.serve(async (request: Request) => {
-  if (request.method === "OPTIONS") return new Response("ok", { headers: cors });
-  if (request.method !== "POST") return json({ error: "method_not_allowed" }, 405);
+  if (!isAllowedOrigin(request.headers.get("origin"))) return json(request, { error: "origin_not_allowed" }, 403);
+  if (request.method === "OPTIONS") return new Response("ok", { headers: corsHeaders(request) });
+  if (request.method !== "POST") return json(request, { error: "method_not_allowed" }, 405);
 
   try {
     const payload = await request.json() as RequestPayload;
     const userId = await authenticateTelegram(payload.initData);
-    if (!userId) return json({ error: "telegram_auth_failed" }, 401);
+    if (!userId) return json(request, { error: "telegram_auth_failed" }, 401);
 
     if (payload.action === "list") {
       const projectId = String(payload.projectId ?? "");
@@ -43,7 +39,7 @@ Deno.serve(async (request: Request) => {
         .order("confidence", { ascending: false })
         .order("created_at", { ascending: true });
       if (error) throw error;
-      return json({ candidates: data ?? [] });
+      return json(request, { candidates: data ?? [] });
     }
 
     if (payload.action === "summary") {
@@ -60,14 +56,14 @@ Deno.serve(async (request: Request) => {
         const status = String(row.status) as keyof typeof summary;
         if (status in summary) summary[status] += 1;
       }
-      return json({ summary });
+      return json(request, { summary });
     }
 
     if (payload.action === "review") {
       const candidateId = String(payload.candidateId ?? "");
       const decision = payload.decision;
       if (!candidateId || !decision || !["confirmed", "rejected"].includes(decision)) {
-        return json({ error: "invalid_review_request" }, 400);
+        return json(request, { error: "invalid_review_request" }, 400);
       }
       const { data, error } = await db.rpc("gi_review_project_fact_candidate", {
         p_candidate_id: candidateId,
@@ -75,12 +71,12 @@ Deno.serve(async (request: Request) => {
         p_decision: decision,
       });
       if (error) throw error;
-      return json({ review: data });
+      return json(request, { review: data });
     }
 
-    return json({ error: "unknown_action" }, 400);
+    return json(request, { error: "unknown_action" }, 400);
   } catch (error) {
-    return json({ error: error instanceof Error ? error.message : "fact_review_failed" }, 400);
+    return json(request, { error: error instanceof Error ? error.message : "fact_review_failed" }, 400);
   }
 });
 
@@ -113,9 +109,9 @@ function mustEnv(name: string): string {
   return value;
 }
 
-function json(payload: unknown, status = 200) {
+function json(request: Request, payload: unknown, status = 200) {
   return new Response(JSON.stringify(payload), {
     status,
-    headers: { ...cors, "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
+    headers: { ...corsHeaders(request), "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
   });
 }

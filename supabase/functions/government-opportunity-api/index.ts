@@ -77,6 +77,20 @@ Deno.serve(async (req) => {
     if (baseReport.error) throw baseReport.error;
 
     const checkId = typeof baseReport.data?.check_id === "string" ? baseReport.data.check_id : null;
+    const checkCompleted = baseReport.data?.status === "completed";
+
+    if (checkId) {
+      const provenance = await db
+        .from("gi_project_checks")
+        .update({
+          engine_version: "government-opportunity-engine-v0.77",
+          created_by: "government-opportunity-api",
+          check_kind: "government_opportunity",
+        })
+        .eq("id", checkId)
+        .eq("telegram_user_id", telegramUserId);
+      if (provenance.error) throw provenance.error;
+    }
 
     const enrichedReport = await db.rpc("gi_enrich_project_report", {
       p_project_id: projectId,
@@ -149,7 +163,14 @@ Deno.serve(async (req) => {
     };
 
     let intelligenceStatus: Record<string, unknown>;
-    try {
+    if (!checkCompleted) {
+      intelligenceStatus = {
+        status: "manual_review",
+        engine_version: "ver436sia-intelligence-v0.72",
+        reason: "partial_check_not_eligible_for_intelligence",
+        publishable_decision_cards: 0,
+      };
+    } else try {
       const intelligenceBundle = finalizeGovernmentIntelligence({
         projectId,
         ...(checkId ? { projectCheckId: checkId } : {}),
@@ -200,9 +221,27 @@ Deno.serve(async (req) => {
     };
 
     if (checkId) {
+      const truthGate = (finalData.truth_gate as Record<string, unknown> | undefined) ?? {};
+      const snapshotRows = await db
+        .from("gi_decision_cards")
+        .select("source_snapshot_id")
+        .eq("project_check_id", checkId)
+        .not("source_snapshot_id", "is", null);
+      if (snapshotRows.error) throw snapshotRows.error;
+      const sourceSnapshotIds = Array.from(new Set(
+        (snapshotRows.data ?? [])
+          .map((row) => row.source_snapshot_id)
+          .filter((value): value is string => typeof value === "string"),
+      ));
       const persisted = await db
         .from("gi_project_checks")
-        .update({ result: report })
+        .update({
+          result: report,
+          source_snapshot_ids: sourceSnapshotIds,
+          truth_gate_status: typeof truthGate.assessment_level === "string"
+            ? truthGate.assessment_level
+            : "unverified",
+        })
         .eq("id", checkId)
         .eq("telegram_user_id", telegramUserId);
       if (persisted.error) throw persisted.error;
