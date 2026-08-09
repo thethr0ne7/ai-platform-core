@@ -28,3 +28,15 @@ test("partial and legacy checks cannot feed intelligence or enrichment", async (
   assert.match(enrichment, /project_check_not_eligible_for_enrichment/);
   assert.match(enrichment, /check_kind !== "government_opportunity"/);
 });
+
+test("browser-facing review functions use the shared origin allowlist", async () => {
+  for (const path of [
+    "../supabase/functions/evidence-review/index.ts",
+    "../supabase/functions/project-fact-review/index.ts",
+  ]) {
+    const source = await read(path);
+    assert.doesNotMatch(source, /access-control-allow-origin["']?:\s*["']\*["']/i);
+    assert.match(source, /\.\.\/_shared\/cors\.ts/);
+    assert.match(source, /origin_not_allowed/);
+  }
+});
