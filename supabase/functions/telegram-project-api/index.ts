@@ -232,41 +232,6 @@ Deno.serve(async (req) => {
       return json(req, { success: true });
     }
 
-    if (action === "run_check") {
-      const projectId = String(payload.projectId ?? "");
-      const { data: project } = await supabase.from("gi_projects").select("id")
-        .eq("id", projectId)
-        .eq("telegram_user_id", user.id)
-        .maybeSingle();
-      if (!project) return json(req, { error: "Проект не найден" }, 404);
-      const startedAt = new Date().toISOString();
-      const { count } = await supabase.from("gi_project_documents")
-        .select("id", { count: "exact", head: true })
-        .eq("project_id", projectId)
-        .eq("telegram_user_id", user.id);
-      const result = {
-        documents_count: count ?? 0,
-        federal_registry: "available_internal_registry",
-        regional_sources: "not_connected",
-        next_action: "Подключить региональный официальный источник",
-      };
-      const { data, error } = await supabase.from("gi_project_checks").insert({
-        project_id: projectId,
-        telegram_user_id: user.id,
-        status: "partial",
-        federal_status: "checked",
-        regional_status: "not_connected",
-        result,
-        started_at: startedAt,
-        finished_at: new Date().toISOString(),
-      }).select("*").single();
-      if (error) throw error;
-      await supabase.from("gi_projects").update({ status: "needs_data", updated_at: new Date().toISOString() })
-        .eq("id", projectId)
-        .eq("telegram_user_id", user.id);
-      return json(req, { check: data });
-    }
-
     return json(req, { error: "Неизвестное действие" }, 400);
   } catch (error) {
     console.error(error);
