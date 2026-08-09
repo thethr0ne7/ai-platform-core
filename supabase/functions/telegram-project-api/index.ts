@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
+import { validateTelegramInitData } from "../_shared/telegram-auth.ts";
 
 const DEFAULT_ALLOWED_ORIGINS = new Set([
   "https://ai-platform-core.vercel.app",
@@ -10,58 +11,6 @@ const DEFAULT_ALLOWED_ORIGINS = new Set([
 const PROJECT_VERCEL_ORIGIN = /^https:\/\/ai-platform-core(?:-[a-z0-9-]+)?-63-gginner\.vercel\.app$/;
 const DOCUMENT_BUCKET = "gi-project-documents";
 const DOWNLOAD_URL_TTL_SECONDS = 300;
-
-type TelegramUser = {
-  id: number;
-  first_name: string;
-  last_name?: string;
-  username?: string;
-  language_code?: string;
-  photo_url?: string;
-  allows_write_to_pm?: boolean;
-};
-
-async function hmacSha256(key: Uint8Array, value: string) {
-  const cryptoKey = await crypto.subtle.importKey(
-    "raw",
-    key,
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  return new Uint8Array(await crypto.subtle.sign("HMAC", cryptoKey, new TextEncoder().encode(value)));
-}
-
-function toHex(bytes: Uint8Array) {
-  return Array.from(bytes).map((byte) => byte.toString(16).padStart(2, "0")).join("");
-}
-
-async function validateTelegramInitData(initData: string, botToken: string): Promise<TelegramUser> {
-  if (!initData) throw new Error("Telegram initData отсутствует");
-  const params = new URLSearchParams(initData);
-  const receivedHash = params.get("hash");
-  if (!receivedHash) throw new Error("В Telegram initData отсутствует hash");
-
-  params.delete("hash");
-  const dataCheckString = Array.from(params.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([key, value]) => `${key}=${value}`)
-    .join("\n");
-
-  const secretKey = await hmacSha256(new TextEncoder().encode("WebAppData"), botToken);
-  const calculatedHash = toHex(await hmacSha256(secretKey, dataCheckString));
-  if (calculatedHash !== receivedHash) throw new Error("Подпись Telegram недействительна");
-
-  const authDate = Number(params.get("auth_date") ?? 0);
-  const now = Math.floor(Date.now() / 1000);
-  if (!authDate || now - authDate > 86400) throw new Error("Сессия Telegram устарела. Откройте Mini App заново");
-
-  const rawUser = params.get("user");
-  if (!rawUser) throw new Error("Telegram не передал пользователя");
-  const user = JSON.parse(rawUser) as TelegramUser;
-  if (!user.id || !user.first_name) throw new Error("Некорректные данные пользователя Telegram");
-  return user;
-}
 
 function safeFileName(name: string) {
   return name.replace(/[^a-zA-Z0-9а-яА-ЯёЁ._-]+/g, "_").slice(0, 180);
