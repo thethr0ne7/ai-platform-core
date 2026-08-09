@@ -73,7 +73,7 @@ Deno.serve(async (request: Request) => {
 
     const latestCheck = await db
       .from("gi_project_checks")
-      .select("id,result,finished_at,started_at")
+      .select("id,result,status,check_kind,created_by,finished_at,started_at")
       .eq("project_id", projectId)
       .eq("telegram_user_id", telegramUserId)
       .order("finished_at", { ascending: false, nullsFirst: false })
@@ -83,6 +83,13 @@ Deno.serve(async (request: Request) => {
     if (latestCheck.error) throw latestCheck.error;
     if (!latestCheck.data?.result || typeof latestCheck.data.result !== "object") {
       throw new Error("project_report_not_found");
+    }
+    if (
+      latestCheck.data.status !== "completed" ||
+      latestCheck.data.check_kind !== "government_opportunity" ||
+      latestCheck.data.created_by !== "government-opportunity-api"
+    ) {
+      throw new Error("project_check_not_eligible_for_enrichment");
     }
 
     const report = latestCheck.data.result as Record<string, unknown>;
