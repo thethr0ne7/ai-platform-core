@@ -1,7 +1,7 @@
 {
   "platform": "AI Platform Core",
-  "version": "0.76.0",
-  "codename": "Catalogue Candidate Pipeline",
+  "version": "0.77.0",
+  "codename": "Agent Capability Governance",
   "components": {
     "core": "0.72.0",
     "web": "0.76.0",
@@ -11,7 +11,8 @@
     "evidenceReview": "0.74.1",
     "measureDirections": "0.75.0",
     "catalogueControl": "0.76.0",
-    "projectDataPlaneE2E": "0.76.0"
+    "projectDataPlaneE2E": "0.76.0",
+    "agentCapabilityGovernance": "0.77.0"
   },
   "architecture": {
     "layers": [
@@ -20,10 +21,14 @@
       "evidence-and-truth",
       "government-intelligence",
       "orchestration",
+      "capability-governance",
       "learning",
       "platform"
     ],
     "verticalSlice": "official source snapshot -> machine candidate -> expert review -> structured measure -> verified requirements -> eligibility; project profile + documents -> parsing -> facts -> analysis -> truth gate -> persistence -> data-plane E2E audit",
+    "agentOperatingModel": "input -> qualify -> context governor -> selective capability router -> produce -> evidence/quality/security gates -> repair -> ship -> traceback",
+    "agentCapabilityRegistry": "runtime/agent-capability-registry.json",
+    "agentContract": "AGENTS.md",
     "epistemicContract": [
       "signal-is-not-fact",
       "trend-is-not-requirement",
@@ -123,6 +128,11 @@
     "no-direction-score-escalation",
     "truth-gated-decision-cards",
     "controlled-forecasting",
+    "context-budget",
+    "selective-capability-routing",
+    "third-party-skill-audit",
+    "multi-agent-boundary",
+    "visual-fidelity",
     "mobile-overflow",
     "human-readable-errors",
     "no-raw-json-ui"
