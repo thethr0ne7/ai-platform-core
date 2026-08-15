@@ -1,0 +1,210 @@
+{
+  "schemaVersion": "1.0.0",
+  "factoryVersion": "3.0",
+  "policy": {
+    "defaultMode": "selective-routing",
+    "thirdPartyDefault": "pattern-only-until-audited",
+    "multiAgentDefault": "off",
+    "contextPolicy": "budgeted",
+    "truthPolicy": "evidence-first",
+    "shipPolicy": "gated"
+  },
+  "capabilities": [
+    {
+      "id": "executive-router",
+      "status": "core",
+      "activation": ["strategy", "product", "finance", "operations", "technology", "marketing", "revenue"],
+      "implements": ["CEO", "CFO", "COO", "CIO", "CMO", "CRO"],
+      "rule": "Activate only relevant policy lenses; no role-play council."
+    },
+    {
+      "id": "context-governor",
+      "status": "core",
+      "source": "https://github.com/muratcankoylan/Agent-Skills-for-Context-Engineering",
+      "adoption": ["context budgeting", "compression", "degradation detection", "tool-output masking", "state handoff", "tool design"],
+      "security": "Extract patterns only until third-party code is audited."
+    },
+    {
+      "id": "engineering-kernel",
+      "status": "core",
+      "source": "https://github.com/obra/superpowers",
+      "adoption": ["planning", "TDD/test-backed work", "systematic debugging", "root-cause analysis", "plan-to-execute discipline", "regression checks"],
+      "rule": "Adopt engineering practices, not uncontrolled agent proliferation."
+    },
+    {
+      "id": "skill-foundry",
+      "status": "core",
+      "source": "https://github.com/anthropics/skills/tree/main/skills/skill-creator",
+      "adoption": ["skill generation", "skill editing", "eval design", "comparison", "trigger optimization", "normalization"],
+      "rule": "DISCOVER → INSPECT → SECURITY → EXTRACT → NORMALIZE → EVAL → APPROVE → REGISTRY"
+    },
+    {
+      "id": "frontend-design",
+      "status": "core",
+      "source": "https://github.com/anthropics/skills/tree/main/skills/frontend-design",
+      "adoption": ["intentional visual direction", "layout", "typography", "spacing", "production-level UI", "anti-AI-slop constraints"],
+      "gates": ["mobile-first", "visual-fidelity", "accessibility", "performance"]
+    },
+    {
+      "id": "design-dna",
+      "status": "core",
+      "source": "https://github.com/zanwei/design-dna",
+      "adoption": ["reference reverse engineering", "design tokens", "layout analysis", "typography", "color systems", "visual effects"],
+      "output": "machine-readable design specification"
+    },
+    {
+      "id": "brand-theme-engine",
+      "status": "core-adapted",
+      "sources": [
+        "https://github.com/anthropics/skills/tree/main/skills/brand-guidelines",
+        "https://github.com/anthropics/skills/tree/main/skills/theme-factory"
+      ],
+      "adoption": ["brand DNA", "theme generation", "cross-artifact consistency"],
+      "rule": "Do not copy Anthropic branding; use the architecture to encode each product's own Brand DNA."
+    },
+    {
+      "id": "canvas-design",
+      "status": "core-selective",
+      "source": "https://github.com/anthropics/skills/tree/main/skills/canvas-design",
+      "activation": ["poster", "one-pager", "infographic", "share card", "cover", "presentation visual"],
+      "gates": ["brand consistency", "legibility", "composition"]
+    },
+    {
+      "id": "web-artifact-engine",
+      "status": "core",
+      "source": "https://github.com/anthropics/skills/tree/main/skills/web-artifacts-builder",
+      "activation": ["calculator", "dashboard", "configurator", "prototype", "interactive report", "web demo"],
+      "adoption": ["React", "TypeScript", "Tailwind", "componentized interactive artifacts"],
+      "gates": ["responsive", "visual quality", "self-contained output where practical"]
+    },
+    {
+      "id": "motion-director",
+      "status": "core",
+      "source": "https://github.com/LottieFiles/motion-design-skill",
+      "adoption": ["timing", "easing", "choreography", "interactive states", "SVG/Lottie motion", "motion intent"],
+      "rule": "Decide why/how motion should behave before selecting implementation technology."
+    },
+    {
+      "id": "web-animation",
+      "status": "core-selective",
+      "source": "https://github.com/greensock/gsap-skills",
+      "activation": ["timeline animation", "scroll animation", "text reveal", "complex interactive motion"],
+      "gates": ["prefers-reduced-motion", "cleanup", "responsive behavior", "performance"]
+    },
+    {
+      "id": "media-video",
+      "status": "core-selective",
+      "source": "https://github.com/remotion-dev/remotion",
+      "activation": ["product demo", "social video", "explainer", "animated infographic", "batch rendering"],
+      "rule": "Use programmatic video when it materially improves delivery or repeatability."
+    },
+    {
+      "id": "web-3d",
+      "status": "controlled",
+      "source": "https://github.com/CloudAI-X/threejs-skills",
+      "activation": ["interactive 3D", "GLTF", "WebGL", "particles", "3D product visualization"],
+      "gates": ["source audit", "performance budget", "mobile fallback", "camera/control QA"],
+      "security": "Do not run repository install instructions blindly; documentation inconsistency requires audit."
+    },
+    {
+      "id": "algorithmic-art",
+      "status": "specialist",
+      "source": "https://github.com/anthropics/skills/tree/main/skills/algorithmic-art",
+      "activation": ["generative patterns", "procedural backgrounds", "data art", "particles", "creative coding"],
+      "rule": "Controlled randomness must support the design system, not create decorative noise."
+    },
+    {
+      "id": "creative-pattern-lab",
+      "status": "pattern-only",
+      "source": "https://github.com/AThevon/genjutsu",
+      "adoption": ["creative direction patterns", "premium visual polish", "motion references"],
+      "rule": "Use as a donor of patterns; do not introduce a competing orchestration layer."
+    },
+    {
+      "id": "marketing-growth",
+      "status": "core-selective",
+      "source": "https://github.com/coreyhaines31/marketingskills",
+      "activation": ["positioning", "copywriting", "CRO", "pricing", "launch", "analytics", "growth"],
+      "rule": "Route only the relevant marketing capability; never load the full library by default."
+    },
+    {
+      "id": "seo-geo",
+      "status": "core-selective",
+      "source": "https://github.com/aaron-he-zhu/aaron-marketing-skills",
+      "replaces": "https://github.com/aaron-he-zhu/seo-geo-claude-skills",
+      "activation": ["technical SEO", "content SEO", "schema", "indexability", "GEO", "AI discovery"],
+      "gates": ["technical", "content", "schema", "indexability", "evidence"]
+    },
+    {
+      "id": "seo-audit-patterns",
+      "status": "pattern-only",
+      "source": "https://github.com/AgriciDaniel/claude-seo",
+      "adoption": ["full-site audit ideas", "technical checks", "schema validation", "SEO prioritization"],
+      "rule": "Extract checks into the factory SEO Gate; do not import the full multi-agent layout."
+    },
+    {
+      "id": "knowledge-os",
+      "status": "optional-core",
+      "source": "https://github.com/kepano/obsidian-skills",
+      "adoption": ["Markdown knowledge management", "linking", "metadata", "search", "portable project memory"],
+      "rule": "Markdown/JSON/source snapshots remain canonical; Obsidian is an interface, not the only store."
+    },
+    {
+      "id": "source-grounded-notebook",
+      "status": "idea-extract",
+      "source": "https://github.com/PleasePrompto/notebooklm-skill",
+      "adoption": ["source-grounded corpus Q&A", "structured summaries", "knowledge synthesis"],
+      "rule": "Implement the architecture in the factory evidence/RAG layer rather than depending on Claude-only browser automation."
+    },
+    {
+      "id": "spreadsheet-adapter",
+      "status": "controlled",
+      "source": "https://github.com/haris-musa/excel-mcp-server",
+      "activation": ["XLSX automation", "formulas", "tables", "charts", "pivot tables", "validation"],
+      "gates": ["allowlisted workspace", "backup", "preview/diff", "reopen/verify"],
+      "security": "Never expose unrestricted filesystem or unauthenticated network transport."
+    },
+    {
+      "id": "code-navigation",
+      "status": "core-pattern",
+      "source": "https://github.com/massgen/massgen",
+      "adoption": ["ripgrep", "ast-grep", "structural code search", "read-only project context", "protected paths"],
+      "rule": "Adopt file-search/navigation patterns only; multi-agent voting is not a default factory mechanism."
+    },
+    {
+      "id": "research-toolbelt",
+      "status": "core-selective",
+      "tools": ["official web sources", "Elicit", "Consensus", "Connected Papers", "Semantic Scholar", "SciSpace", "archive snapshots", "reverse image search", "technical validators"],
+      "rule": "Tools discover evidence; authority comes from source quality and provenance."
+    },
+    {
+      "id": "claim-checker",
+      "status": "core-selective",
+      "activation": ["viral claims", "numerology", "causal claims", "scientific claims", "high-impact factual assertions"],
+      "flow": "CLAIM → SOURCE → EVIDENCE → CAUSALITY CHECK → ALTERNATIVE EXPLANATION → VERDICT",
+      "rule": "Pattern or arithmetic coincidence is not causal evidence."
+    },
+    {
+      "id": "visual-fidelity-gate",
+      "status": "core",
+      "checks": ["layout", "typography", "color", "spacing", "component geometry", "effects", "motion", "mobile behavior"],
+      "flow": "REFERENCE → IMPLEMENT → SCREENSHOT → COMPARE → REPAIR → PASS"
+    },
+    {
+      "id": "third-party-skill-security-gate",
+      "status": "core",
+      "checks": ["command execution", "path traversal", "filesystem scope", "secrets", "network auth", "browser automation", "install hooks", "remote code download", "data exfiltration", "license"],
+      "rule": "Unknown risk keeps the integration pattern-only."
+    }
+  ],
+  "explicitlyRejectedAsCore": [
+    "unbounded multi-agent swarms",
+    "role-play councils",
+    "recursive autonomous delegation",
+    "blind skill installers",
+    "unrestricted MCP filesystem access",
+    "temporary-email or disposable-file services as production dependencies",
+    "paywall-bypass/piracy sources as evidence infrastructure",
+    "duplicate skills that only increase prompt/context noise"
+  ]
+}
